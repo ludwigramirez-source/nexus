@@ -88,4 +88,102 @@ export const systemConfigService = {
       throw error;
     }
   },
+
+  // ============================================
+  // COMPANY CONFIGURATION
+  // ============================================
+
+  async getCompanyConfig() {
+    try {
+      const { data } = await api.get('/system-config/company');
+      return data;
+    } catch (error) {
+      console.error('Error fetching company config:', error);
+      throw error;
+    }
+  },
+
+  async updateCompanyConfig(companyData) {
+    try {
+      const { data } = await api.put('/system-config/company', companyData);
+      return data;
+    } catch (error) {
+      console.error('Error updating company config:', error);
+      throw error;
+    }
+  },
+
+  // ============================================
+  // ALL CONFIGURATION
+  // ============================================
+
+  async getAllConfig() {
+    try {
+      const { data } = await api.get('/system-config/all');
+      return data;
+    } catch (error) {
+      console.error('Error fetching all config:', error);
+      throw error;
+    }
+  },
+
+  async updateGeneralConfig(generalData) {
+    try {
+      const { data } = await api.put('/system-config/general', generalData);
+      return data;
+    } catch (error) {
+      console.error('Error updating general config:', error);
+      throw error;
+    }
+  },
+
+  async updateProductsConfig(productsData) {
+    try {
+      const { data } = await api.put('/system-config/products', productsData);
+      return data;
+    } catch (error) {
+      console.error('Error updating products config:', error);
+      throw error;
+    }
+  },
+
+  async updateClientsConfig(clientsData) {
+    try {
+      const { data } = await api.put('/system-config/clients', clientsData);
+      return data;
+    } catch (error) {
+      console.error('Error updating clients config:', error);
+      throw error;
+    }
+  },
+
+  async updateOkrsConfig(okrsData) {
+    try {
+      const { data } = await api.put('/system-config/okrs', okrsData);
+      return data;
+    } catch (error) {
+      console.error('Error updating okrs config:', error);
+      throw error;
+    }
+  },
+
+  async testEmailConnection() {
+    try {
+      const { data } = await api.post('/system-config/test-email-connection');
+      return data;
+    } catch (error) {
+      console.error('Error testing email connection:', error);
+      throw error;
+    }
+  },
+
+  async sendTestEmail(to) {
+    try {
+      const { data } = await api.post('/system-config/send-test-email', { to });
+      return data;
+    } catch (error) {
+      console.error('Error sending test email:', error);
+      throw error;
+    }
+  },
 };

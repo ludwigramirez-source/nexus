@@ -44,8 +44,15 @@ api.interceptors.response.use(
         // Guardar nuevo token
         localStorage.setItem('access_token', data.data.accessToken);
 
-        // Reintentar request original
+        // Asegurarse de que el header existe
+        if (!originalRequest.headers) {
+          originalRequest.headers = {};
+        }
+
+        // Actualizar el header de autorización
         originalRequest.headers.Authorization = `Bearer ${data.data.accessToken}`;
+
+        // Reintentar request original
         return api(originalRequest);
       } catch (refreshError) {
         // Refresh falló - logout

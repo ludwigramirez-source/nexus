@@ -48,3 +48,71 @@ export interface RolesResponse {
 export interface SkillsResponse {
   skills: SkillConfig[];
 }
+
+// ============================================
+// COMPANY CONFIGURATION
+// ============================================
+
+export interface CompanyLogo {
+  url: string;
+  fileName: string;
+  uploadedAt: Date;
+}
+
+export interface QuotationSigner {
+  name: string;
+  position: string;
+}
+
+export interface CommercialTermsTemplate {
+  id: string;
+  name: string;
+  content: string;
+  isDefault: boolean;
+}
+
+export interface ObservationsTemplate {
+  id: string;
+  name: string;
+  content: string;
+  isDefault: boolean;
+}
+
+export interface CompanyConfig {
+  logo?: CompanyLogo;
+  companyName?: string;
+  companyType?: string;
+  companyNit?: string;
+  companyAddress?: string;
+  companyCity?: string;
+  companyPhone?: string;
+  companyWebsite?: string;
+  emailFrom?: string;
+  emailHost?: string;
+  emailPort?: number;
+  emailUser?: string;
+  emailPassword?: string;
+  emailSecure?: boolean;
+  quotationSigner: QuotationSigner;
+  commercialTermsTemplates: CommercialTermsTemplate[];
+  observationsTemplates: ObservationsTemplate[];
+}
+
+export interface UpdateCompanyConfigDTO {
+  companyName?: string;
+  companyType?: string;
+  companyNit?: string;
+  companyAddress?: string;
+  companyCity?: string;
+  companyPhone?: string;
+  companyWebsite?: string;
+  emailFrom?: string;
+  emailHost?: string;
+  emailPort?: number;
+  emailUser?: string;
+  emailPassword?: string;
+  emailSecure?: boolean;
+  quotationSigner?: QuotationSigner;
+  commercialTermsTemplates?: CommercialTermsTemplate[];
+  observationsTemplates?: ObservationsTemplate[];
+}

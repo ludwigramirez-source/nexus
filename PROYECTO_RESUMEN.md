@@ -1,6 +1,6 @@
 # IPTEGRA NEXUS - Resumen del Proyecto
-**Fecha de última actualización:** 13 de Enero 2026
-**Estado:** ✅ Sistema de Roles + Activity Logs + Tema Dark/Light + Dashboard de Productos y Clientes implementados
+**Fecha de última actualización:** 14 de Enero 2026
+**Estado:** ✅ Sistema de Roles + Activity Logs + Tema Dark/Light + Dashboard + UI/UX Unificada implementados
 
 ---
 
@@ -632,15 +632,16 @@ npx prisma db seed
 | Módulo | Estado | Comentarios |
 |--------|--------|-------------|
 | 🔐 Autenticación | ✅ 100% | Login, refresh, logout funcionando + Menú usuario funcional |
-| 👥 Gestión de Usuarios | ✅ 95% | Backend completo, frontend completo, iconos genéricos |
+| 👥 Gestión de Usuarios | ✅ 100% | Backend completo, frontend completo, toggle switch, UI unificada |
 | 🛡️ Sistema de Roles | ✅ 100% | Backend + Frontend completamente funcional |
-| 📝 Activity Logs | ✅ 100% | Auditoría completa con IP/UA, Actor/Target, Permisos por Rol, CSV |
+| 📝 Activity Logs | ✅ 100% | Auditoría completa con IP/UA, Actor/Target, Permisos por Rol, CSV, UI unificada |
 | 🎨 Sistema de Temas | ✅ 100% | Dark/Light mode con persistencia y detección de sistema |
+| 🎨 UI/UX Unificada | ✅ 100% | Toggle switches, registro de actividades, títulos, grid system 25% consistente |
 | 📥 Solicitudes | ✅ 80% | Backend completo, frontend parcial |
 | 📊 Dashboard Productos/Clientes | ✅ 100% | 8 métricas, lista productos, tabla clientes, filtros, Excel export |
 | 📅 Capacidad | ⏳ 50% | Backend básico, frontend con datos mock |
 | 🎯 OKRs | ⏳ 50% | Backend completo, frontend con datos mock |
-| 💼 Productos/Clientes | ✅ 95% | CRUD completo, activity logs, Excel export, gestión productos |
+| 💼 Productos/Clientes | ✅ 100% | CRUD completo, activity logs, Excel export, títulos principales, UI unificada |
 | 🔔 Notificaciones | ⏳ 20% | Backend básico, sin integración frontend |
 | 🤖 IA (Insights) | ⏳ 40% | Endpoints creados, sin uso en frontend |
 
@@ -661,7 +662,11 @@ npx prisma db seed
 - ✅ **Sistema de temas Dark/Light Mode completamente funcional**
 - ✅ **Menú de usuario conectado a datos reales**
 - ✅ **Interfaz de administración de equipo y sistema**
-- ✅ **UI/UX consistente con iconos genéricos**
+- ✅ **UI/UX completamente unificada entre módulos**
+- ✅ **Toggle switches consistentes para activar/desactivar**
+- ✅ **Registro de actividades con diseño uniforme (5 items, filtros, 25% ancho)**
+- ✅ **Títulos principales y estructura visual consistente**
+- ✅ **Sistema de grid responsive con proporciones optimizadas**
 
 **Listo para continuar desarrollo de funcionalidades específicas.**
 
@@ -1043,7 +1048,205 @@ npx prisma db seed
   - Todos los iconos ahora existen en iconMap.js
 - ⏱️ Tiempo: ~5 horas
 
+### **Sesión 5 - 14 de Enero 2026 (Mañana)**
+- ✅ **Unificación de UI/UX entre módulos:**
+  - Implementado toggle switch uniforme para activar/desactivar en gestión de usuarios
+  - Eliminada columna de estado separada + botón duplicado en acciones
+  - Toggle switch verde (activo) / gris (inactivo) con transiciones suaves
+- ✅ **Registro de Actividades unificado:**
+  - ActivityLogSidebar actualizado para coincidir con diseño de usuarios
+  - Ventana con borde redondeado (`rounded-lg border shadow-elevation-1`)
+  - Letras más grandes: text-lg para títulos, text-sm para descripciones
+  - Íconos grandes: 48px loading/empty, 20px header, 18px items
+  - Filtro incluido con 6 opciones: Todas, Gestión, Ediciones, Eliminaciones, Configuración, Sistema
+  - Muestra exactamente 5 actividades (igual que usuarios)
+  - Auto-refresh cada 30 segundos
+  - Actor y Target User visibles con iconos diferenciados
+- ✅ **Títulos principales agregados:**
+  - **Productos:** "Gestión de Productos y Servicios" + descripción
+  - **Clientes:** "Gestión de Clientes" + descripción
+  - Mismo formato que usuarios (text-2xl md:text-3xl)
+  - Layout flex-col sm:flex-row con botones alineados a la derecha
+- ✅ **Sistema de Grid unificado:**
+  - Implementado grid 12 columnas en productos/clientes
+  - Contenido principal: 75% (9 columnas)
+  - Registro de actividades: 25% (3 columnas)
+  - Proporciones optimizadas para legibilidad de las 5 actividades
+  - Gap de 6 entre secciones para espaciado consistente
+- ✅ **Estructura visual consistente:**
+  - Alineación de títulos, filtros y tablas unificada
+  - ActivityLogSidebar alineado con títulos principales
+  - Padding y márgenes consistentes en todos los módulos
+  - Mismo espaciado entre usuarios, productos y clientes
+- ✅ **Ícono Server agregado a iconMap.js**
+- **Archivos modificados:**
+  - `frontend/src/pages/team-and-system-administration/components/UserManagementTable.jsx`
+  - `frontend/src/pages/products-and-client-portfolio/components/ActivityLogSidebar.jsx`
+  - `frontend/src/pages/products-and-client-portfolio/index.jsx`
+  - `frontend/src/pages/team-and-system-administration/index.jsx`
+  - `frontend/src/components/iconMap.js`
+- **Resultado:** UI/UX completamente uniforme entre gestión de usuarios, productos y clientes
+- ⏱️ Tiempo: ~2 horas
+
+### **Sesión 6 - 14 de Enero 2026 (Tarde)**
+- ✅ **Sistema Completo de Cotizaciones:**
+  - **Backend:**
+    - Módulo completo `/api/quotations` con CRUD, duplicación, envío de email
+    - `quotations.service.ts` con cálculos automáticos de subtotal, IVA, descuentos, total
+    - `quotations.controller.ts` con endpoints protegidos
+    - Schema Prisma: tablas `quotations` y `quotation_items`
+    - Generación automática de número de cotización (BAQ-2026-XXXX)
+    - Estados: DRAFT, SENT, ACCEPTED, REJECTED, EXPIRED, CONVERTED_TO_ORDER
+    - Relaciones con clientes, productos y usuarios
+  - **Frontend:**
+    - QuotationsTable con filtros avanzados (status, cliente, rango de fechas, búsqueda)
+    - QuotationModal para crear/editar con múltiples items
+    - Cálculos en tiempo real de subtotales, descuentos, IVA y total
+    - Selector de recurrencia por ítem (MONTHLY, QUARTERLY, etc.)
+    - Campos: validez, tiempo de entrega, garantía, términos de pago, observaciones
+    - Acciones: Ver, Editar, Duplicar, Descargar PDF, Enviar Email, Cambiar Estado, Eliminar
+  - **Archivos creados:**
+    - `backend/src/modules/quotations/` (service, controller, routes, types)
+    - `frontend/src/services/quotationService.js`
+    - `frontend/src/pages/products-and-client-portfolio/components/QuotationsTable.jsx`
+    - `frontend/src/pages/products-and-client-portfolio/components/QuotationModal.jsx`
+    - `frontend/src/pages/products-and-client-portfolio/components/QuotationFilterToolbar.jsx`
+    - `frontend/src/pages/products-and-client-portfolio/components/QuotationItemRow.jsx`
+
+- ✅ **Generación de PDFs con jsPDF:**
+  - **pdfGenerator.js:**
+    - Logo de empresa con aspect ratio correcto
+    - Header con datos de empresa (configurables desde sistema)
+    - Información de cliente (nombre, NIT, contacto)
+    - Tabla de items con descripción, cantidad, precio, descuento, total
+    - Totales: subtotal, descuento, IVA, total final
+    - Condiciones comerciales y observaciones
+    - Firma con nombre y cargo configurables
+    - Paginación automática si el contenido es extenso
+    - Diseño profesional con colores corporativos
+  - **Integración:**
+    - Botón "Descargar PDF" en cada cotización
+    - PDF se adjunta automáticamente al enviar por correo
+    - Formato de moneda y fechas en español
+  - **Archivos creados:**
+    - `frontend/src/utils/pdfGenerator.js`
+
+- ✅ **Sistema de Envío de Correos:**
+  - **Backend - emailService.ts:**
+    - Integración con nodemailer para envío SMTP
+    - Configuración desde panel de administración (host, puerto, usuario, contraseña)
+    - Formato de remitente: "Nombre Empresa <email@dominio.com>"
+    - Soporte para CC, BCC
+    - Adjuntos con base64 (PDFs)
+    - Plantilla HTML para correos
+    - Endpoint de prueba: `/api/system-config/send-test-email`
+  - **Frontend - SendEmailModal:**
+    - Modal para enviar cotizaciones por correo
+    - Campos: Para, CC, BCC, Asunto, Cuerpo
+    - Asunto prellenado: "Cotización [NÚMERO] - IPTEGRA SAS"
+    - Cuerpo con texto de cortesía predefinido
+    - Generación de PDF en tiempo real antes de enviar
+    - Conversión de PDF a base64 para adjuntar
+    - Logs en consola para debugging
+  - **Configuración de Empresa:**
+    - Panel en Team & System Administration
+    - Sección "Configuración de Email" con:
+      - Email de envío
+      - Servidor SMTP (host, puerto)
+      - Usuario y contraseña SMTP
+      - Cifrado SSL/TLS
+    - Botón "Enviar Correo de Prueba" para validar configuración
+  - **Archivos creados:**
+    - `backend/src/utils/emailService.ts`
+    - `frontend/src/pages/products-and-client-portfolio/components/SendEmailModal.jsx`
+  - **Archivos modificados:**
+    - `backend/src/modules/system-config/` (agregado envío de email)
+
+- ✅ **Configuración del Sistema (System Config):**
+  - **Configuración de Empresa:**
+    - Nombre, tipo, NIT, dirección, ciudad, teléfono, website
+    - Logo de empresa (base64) para PDFs y emails
+    - Firmante de cotizaciones (nombre y cargo)
+  - **Configuración de Email:**
+    - Host, puerto, usuario, contraseña SMTP
+    - Email de envío (con nombre de empresa)
+    - Prueba de conexión con botón de test
+  - **Árbol de Navegación:**
+    - NavigationTree con secciones: General, Empresa, Email, Roles, Usuarios
+    - Scroll suave entre secciones
+    - Componente reutilizable SystemConfigPanel
+  - **Archivos:**
+    - `backend/src/modules/system-config/` (completo)
+    - `frontend/src/services/systemConfigService.js`
+    - `frontend/src/pages/team-and-system-administration/components/SystemConfigPanel.jsx`
+    - `frontend/src/pages/team-and-system-administration/components/NavigationTree.jsx`
+
+- ✅ **Correcciones de Errores Críticos:**
+  - **Error de importación nodemailer:**
+    - Problema: `import_nodemailer.default.createTransporter is not a function`
+    - Causa: Conflicto CommonJS vs ES6 modules
+    - Solución: Cambiar a `import * as nodemailer from 'nodemailer'`
+    - Archivo: `backend/src/utils/emailService.ts`
+
+  - **Activity logs - userName faltante:**
+    - Problema: Varios endpoints no pasaban `userName` al crear logs
+    - Solución: Agregado `userName` y `userEmail` en:
+      - `quotations.service.ts` (create, update, updateStatus, delete, duplicate, sendEmail)
+    - Todos los activity logs ahora registran correctamente actor y target
+
+  - **Nombre del cliente desaparecía:**
+    - Problema: Al actualizar/duplicar cotización, el campo `clientName` desaparecía de la tabla
+    - Causa: Backend devolvía `client: { name: ... }` pero tabla esperaba `clientName`
+    - Solución: Recargar lista completa después de actualizar/duplicar
+    - Archivo: `frontend/src/pages/products-and-client-portfolio/index.jsx`
+
+  - **Contador de cotizaciones en tabs:**
+    - Problema: Mostraba "0" hasta hacer clic en el tab de cotizaciones
+    - Causa: Cotizaciones solo se cargaban al activar el tab
+    - Solución: Cargar cotizaciones en `useEffect` inicial junto con productos/clientes
+    - Archivo: `frontend/src/pages/products-and-client-portfolio/index.jsx`
+
+  - **Ícono XCircle faltante:**
+    - Problema: `Icon "XCircle" not found in iconMap`
+    - Solución: Agregado `XCircle` a imports y exports en iconMap
+    - Archivo: `frontend/src/components/iconMap.js`
+
+  - **PDF se generaba vacío:**
+    - Problema: PDF enviado por correo no tenía items ni términos actualizados
+    - Causa: Modal usaba datos resumidos de la tabla, no la cotización completa
+    - Solución: Cargar cotización completa con `quotationService.getById()` antes de abrir modal
+    - Archivo: `frontend/src/pages/products-and-client-portfolio/index.jsx` (handleSendQuotationEmail)
+
+  - **Campo "Para" prellenado incorrectamente:**
+    - Problema: Modal de email prellenaba con email del cliente (que podía no existir)
+    - Solución: Dejar campo "Para" vacío para que usuario lo complete manualmente
+    - Archivo: `frontend/src/pages/products-and-client-portfolio/components/SendEmailModal.jsx`
+
+- ✅ **Mejoras de UX:**
+  - Logs detallados en consola para debugging de PDFs y emails
+  - Formato de remitente con nombre de empresa en emails
+  - Descripción clara de campos de configuración de email
+  - Modal de email con validaciones antes de enviar
+
+- **Endpoints agregados:**
+  - `POST /api/quotations` - Crear cotización
+  - `GET /api/quotations` - Listar con filtros
+  - `GET /api/quotations/:id` - Obtener por ID
+  - `PUT /api/quotations/:id` - Actualizar
+  - `DELETE /api/quotations/:id` - Eliminar
+  - `PATCH /api/quotations/:id/status` - Cambiar estado
+  - `POST /api/quotations/:id/duplicate` - Duplicar
+  - `POST /api/quotations/:id/send-email` - Enviar por correo
+  - `POST /api/system-config/send-test-email` - Test de email
+
+- **Dependencias agregadas:**
+  - `jspdf` - Generación de PDFs
+  - `jspdf-autotable` - Tablas en PDFs
+  - `nodemailer` - Envío de correos SMTP
+
+- ⏱️ Tiempo: ~4 horas
+
 ---
 
-**Última actualización:** 13 de Enero 2026
+**Última actualización:** 14 de Enero 2026 - 17:00
 **Desarrollado por:** Claude Code + Usuario

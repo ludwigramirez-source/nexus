@@ -75,6 +75,7 @@ import {
   Save,
   Search,
   Send,
+  Server,
   Settings,
   Share2,
   Shield,
@@ -91,6 +92,7 @@ import {
   UserPlus,
   Users,
   X,
+  XCircle,
   Zap,
   Moon,
 } from 'lucide-react';
@@ -176,6 +178,7 @@ export const iconMap = {
   Save,
   Search,
   Send,
+  Server,
   Settings,
   Share2,
   Shield,
@@ -192,6 +195,7 @@ export const iconMap = {
   UserPlus,
   Users,
   X,
+  XCircle,
   Zap,
   Moon,
 };

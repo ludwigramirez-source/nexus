@@ -63,10 +63,6 @@ const UserManagementTable = ({ users, onEdit, onDelete, onToggleStatus, onBulkAc
     return colors?.[role] || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300';
   };
 
-  const getStatusColor = (status) => {
-    return status === 'active' ?'text-success' :'text-muted-foreground';
-  };
-
   return (
     <div className="bg-card rounded-lg border border-border shadow-elevation-1">
       <div className="p-4 md:p-6 border-b border-border">
@@ -204,23 +200,22 @@ const UserManagementTable = ({ users, onEdit, onDelete, onToggleStatus, onBulkAc
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${user?.status === 'active' ? 'bg-success' : 'bg-muted-foreground'}`} />
-                    <span className={`text-sm font-caption ${getStatusColor(user?.status)}`}>
-                      {user?.statusLabel}
-                    </span>
-                  </div>
+                  <button
+                    onClick={() => onToggleStatus(user?.id, user?.status)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                      user?.status === 'active' ? 'bg-success' : 'bg-muted'
+                    }`}
+                    title={user?.status === 'active' ? 'Desactivar usuario' : 'Activar usuario'}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        user?.status === 'active' ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      iconName={user?.status === 'active' ? 'Lock' : 'CheckCircle'}
-                      onClick={() => onToggleStatus(user?.id, user?.status)}
-                      className={`h-8 w-8 ${user?.status === 'active' ? 'text-warning hover:text-warning' : 'text-success hover:text-success'}`}
-                      title={user?.status === 'active' ? 'Desactivar usuario' : 'Activar usuario'}
-                    />
                     <Button
                       variant="ghost"
                       size="icon"

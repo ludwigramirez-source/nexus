@@ -1,104 +1,206 @@
 import React, { useState, useEffect } from 'react';
+import { activityLogsService } from '../../../services/activityLogsService';
 import Icon from '../../../components/AppIcon';
-import { activityLogService } from '../../../services/activityLogService';
+import Select from '../../../components/ui/Select';
 
 const ActivityLogSidebar = () => {
+  const [filter, setFilter] = useState('all');
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchActivities();
+    fetchRecentActivities();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchRecentActivities, 30000);
+    return () => clearInterval(interval);
   }, []);
 
-  const fetchActivities = async () => {
+  const fetchRecentActivities = async () => {
     try {
-      const result = await activityLogService.getRecent();
-      if (result.success) {
-        setActivities(result.data?.logs || []);
-      }
+      setLoading(true);
+      const logs = await activityLogsService.getRecent(5);
+
+      // Transform backend format to component format
+      const transformedLogs = logs.map((log) => ({
+        id: log.id,
+        type: mapActionToType(log.action),
+        action: log.action,
+        description: log.description,
+        timestamp: log.createdAt,
+        userName: log.userName || 'Sistema',
+        userAvatar: log.user?.avatar || null,
+        userAvatarAlt: log.userName,
+        targetUser: log.metadata?.targetUser,
+      }));
+
+      setActivities(transformedLogs);
     } catch (error) {
-      console.error('Error fetching activities:', error);
+      console.error('Error fetching recent activities:', error);
+      setActivities([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const getActivityIcon = (action) => {
-    if (action?.includes('create')) return 'Plus';
-    if (action?.includes('update')) return 'Edit';
-    if (action?.includes('delete')) return 'Trash2';
-    return 'Activity';
+  const mapActionToType = (action) => {
+    const typeMap = {
+      'LOGIN': 'user',
+      'LOGOUT': 'user',
+      'REGISTER': 'user',
+      'CREATE': 'user',
+      'UPDATE': 'edit',
+      'DELETE': 'delete',
+      'STATUS_CHANGE': 'config',
+    };
+    return typeMap[action] || 'system';
   };
 
-  const getActivityColor = (action) => {
-    if (action?.includes('create')) return 'text-success';
-    if (action?.includes('update')) return 'text-primary';
-    if (action?.includes('delete')) return 'text-error';
-    return 'text-muted-foreground';
+  const filterOptions = [
+    { value: 'all', label: 'Todas las actividades' },
+    { value: 'user', label: 'Gestión' },
+    { value: 'edit', label: 'Ediciones' },
+    { value: 'delete', label: 'Eliminaciones' },
+    { value: 'config', label: 'Configuración' },
+    { value: 'system', label: 'Sistema' }
+  ];
+
+  const filteredActivities = filter === 'all'
+    ? activities
+    : activities?.filter(activity => activity?.type === filter);
+
+  const getActivityIcon = (type) => {
+    const icons = {
+      user: 'UserPlus',
+      edit: 'Edit',
+      delete: 'Trash2',
+      config: 'Settings',
+      system: 'Server'
+    };
+    return icons?.[type] || 'Activity';
   };
 
-  const formatTimeAgo = (date) => {
+  const getActivityColor = (type) => {
+    const colors = {
+      user: 'text-success bg-success/10',
+      edit: 'text-primary bg-primary/10',
+      delete: 'text-error bg-error/10',
+      config: 'text-amber-600 bg-amber-600/10',
+      system: 'text-purple-600 bg-purple-600/10'
+    };
+    return colors?.[type] || 'text-muted-foreground bg-muted';
+  };
+
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
     const now = new Date();
-    const activityDate = new Date(date);
-    const diffInSeconds = Math.floor((now - activityDate) / 1000);
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffInSeconds < 60) return 'Hace un momento';
-    if (diffInSeconds < 3600) return `Hace ${Math.floor(diffInSeconds / 60)} min`;
-    if (diffInSeconds < 86400) return `Hace ${Math.floor(diffInSeconds / 3600)} h`;
-    return `Hace ${Math.floor(diffInSeconds / 86400)} días`;
+    if (diffMins < 1) {
+      return 'Ahora mismo';
+    } else if (diffMins < 60) {
+      return `Hace ${diffMins} min`;
+    } else if (diffHours < 24) {
+      return `Hace ${diffHours}h`;
+    } else if (diffDays < 7) {
+      return `Hace ${diffDays}d`;
+    } else {
+      return date?.toLocaleDateString('es-MX', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    }
   };
 
   return (
-    <div className="bg-card border-l border-border w-80 h-full overflow-y-auto">
-      <div className="sticky top-0 bg-card border-b border-border p-4 z-10">
-        <div className="flex items-center space-x-2">
-          <Icon name="Activity" size={18} className="text-primary" />
-          <h3 className="text-sm font-heading font-semibold text-foreground">
-            Actividad Reciente
+    <div className="bg-card rounded-lg border border-border shadow-elevation-1 h-full flex flex-col">
+      <div className="p-4 border-b border-border">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-heading font-semibold text-foreground">
+            Registro de Actividad
           </h3>
+          <Icon name="Activity" size={20} className="text-muted-foreground" />
         </div>
+        <Select
+          options={filterOptions}
+          value={filter}
+          onChange={setFilter}
+          placeholder="Filtrar actividades"
+        />
       </div>
-
-      <div className="p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4">
         {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+          <div className="flex flex-col items-center justify-center py-12">
+            <Icon name="Loader2" size={48} className="text-primary animate-spin mb-3" />
+            <p className="text-sm font-caption text-muted-foreground text-center">
+              Cargando actividades...
+            </p>
           </div>
-        ) : activities.length === 0 ? (
-          <div className="text-center py-8">
-            <Icon name="Inbox" size={32} className="text-muted-foreground mb-2 opacity-50 mx-auto" />
-            <p className="text-xs text-muted-foreground">
-              No hay actividad reciente
+        ) : filteredActivities?.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <Icon name="FileText" size={48} className="text-muted-foreground mb-3" />
+            <p className="text-sm font-caption text-muted-foreground text-center">
+              No hay actividades recientes
             </p>
           </div>
         ) : (
-          activities.slice(0, 20).map((activity) => (
-            <div
-              key={activity?.id}
-              className="flex items-start space-x-3 pb-3 border-b border-border last:border-0"
-            >
-              <div className={`flex-shrink-0 ${getActivityColor(activity?.action)}`}>
-                <Icon name={getActivityIcon(activity?.action)} size={14} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-foreground font-medium truncate">
-                  {activity?.userName || 'Usuario'}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {activity?.description}
-                </p>
-                {activity?.details && (
-                  <p className="text-xs text-muted-foreground/70 mt-1 italic truncate">
-                    {activity?.details}
+          <div className="space-y-4">
+            {filteredActivities?.map((activity) => (
+              <div
+                key={activity?.id}
+                className="flex gap-3 p-3 rounded-lg hover:bg-muted/30 transition-smooth"
+              >
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${getActivityColor(activity?.type)}`}>
+                  <Icon name={getActivityIcon(activity?.type)} size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <p className="text-sm font-caption font-medium text-foreground">
+                      {activity?.action}
+                    </p>
+                    <span className="text-xs font-caption text-muted-foreground whitespace-nowrap">
+                      {formatTimestamp(activity?.timestamp)}
+                    </span>
+                  </div>
+                  <p className="text-sm font-caption text-muted-foreground line-clamp-2 mb-2">
+                    {activity?.description}
                   </p>
-                )}
-                <p className="text-xs text-muted-foreground/60 mt-1">
-                  {formatTimeAgo(activity?.createdAt)}
-                </p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Icon name="User" size={12} className="text-primary" />
+                      </div>
+                      <span className="text-xs font-caption text-muted-foreground">
+                        {activity?.userName}
+                      </span>
+                    </div>
+                    {activity?.targetUser && (
+                      <>
+                        <Icon name="ArrowRight" size={12} className="text-muted-foreground" />
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-5 h-5 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                            <Icon name="UserCheck" size={12} className="text-amber-600" />
+                          </div>
+                          <span className="text-xs font-caption text-muted-foreground">
+                            {activity?.targetUser?.name}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
+      </div>
+      <div className="p-4 border-t border-border bg-muted/30">
+        <p className="text-xs font-caption text-muted-foreground text-center">
+          Mostrando {filteredActivities?.length} de {activities?.length} actividades
+        </p>
       </div>
     </div>
   );

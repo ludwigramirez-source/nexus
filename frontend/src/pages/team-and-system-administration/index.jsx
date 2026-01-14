@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { userService } from '../../services/userService';
 import { authService } from '../../services/authService';
+import { systemConfigService } from '../../services/systemConfigService';
 import socketService from '../../services/socketService';
 import Sidebar from '../../components/ui/Sidebar';
 import UserProfileHeader from '../../components/ui/UserProfileHeader';
@@ -159,6 +160,29 @@ const TeamAndSystemAdministration = () => {
   useEffect(() => {
     localStorage.setItem('systemConfig', JSON.stringify(systemConfig));
   }, [systemConfig]);
+
+  // Cargar toda la configuración desde API
+  useEffect(() => {
+    const loadAllConfig = async () => {
+      try {
+        const response = await systemConfigService.getAllConfig();
+        if (response?.data) {
+          setSystemConfig(prev => ({
+            ...prev,
+            general: response.data.general || prev.general,
+            products: response.data.products || prev.products,
+            clients: response.data.clients || prev.clients,
+            company: response.data.company || prev.company,
+            okrs: response.data.okrs || prev.okrs,
+          }));
+        }
+      } catch (error) {
+        console.error('Error loading config:', error);
+      }
+    };
+
+    loadAllConfig();
+  }, []);
 
   const handleCreateUser = () => {
     setModalMode('create');
@@ -349,11 +373,38 @@ const TeamAndSystemAdministration = () => {
     }
   };
 
-  const handleSaveConfig = (newConfig) => {
+  const handleSaveConfig = async (newConfig) => {
     setSystemConfig(newConfig);
 
     // Guardar configuración en localStorage para que esté disponible en toda la aplicación
     localStorage.setItem('systemConfig', JSON.stringify(newConfig));
+
+    // Guardar cada sección en su endpoint correspondiente
+    try {
+      const savePromises = [];
+
+      if (newConfig?.general) {
+        savePromises.push(systemConfigService.updateGeneralConfig(newConfig.general));
+      }
+      if (newConfig?.products) {
+        savePromises.push(systemConfigService.updateProductsConfig(newConfig.products));
+      }
+      if (newConfig?.clients) {
+        savePromises.push(systemConfigService.updateClientsConfig(newConfig.clients));
+      }
+      if (newConfig?.company) {
+        savePromises.push(systemConfigService.updateCompanyConfig(newConfig.company));
+      }
+      if (newConfig?.okrs) {
+        savePromises.push(systemConfigService.updateOkrsConfig(newConfig.okrs));
+      }
+
+      await Promise.all(savePromises);
+    } catch (error) {
+      console.error('Error saving config:', error);
+      alert('Error al guardar la configuración. Por favor intenta nuevamente.');
+      return;
+    }
 
     const newActivity = {
       id: activities?.length + 1,

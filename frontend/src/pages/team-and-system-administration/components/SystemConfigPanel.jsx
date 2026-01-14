@@ -7,6 +7,7 @@ import { Checkbox } from '../../../components/ui/Checkbox';
 import { storeEncrypted, retrieveEncrypted } from '../../../services/encryptionService';
 import { reinitializeClient } from '../../../services/openaiClient';
 import { testConnection } from '../../../services/openaiAnalyticsService';
+import { systemConfigService } from '../../../services/systemConfigService';
 
 const SystemConfigPanel = ({ config, onSave }) => {
   const [activeTab, setActiveTab] = useState('general');
@@ -21,6 +22,7 @@ const SystemConfigPanel = ({ config, onSave }) => {
     { id: 'general', label: 'General', icon: 'Settings' },
     { id: 'products', label: 'Productos', icon: 'Package' },
     { id: 'clients', label: 'Clientes', icon: 'Users' },
+    { id: 'company', label: 'Empresa', icon: 'Building2' },
     { id: 'okrs', label: 'OKRs', icon: 'Target' },
     { id: 'integrations', label: 'Integraciones', icon: 'Plug' }
   ];
@@ -365,6 +367,437 @@ const SystemConfigPanel = ({ config, onSave }) => {
                     standard: e?.target?.checked
                   })}
                 />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'company' && (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-heading font-semibold text-foreground mb-4">
+                Logo de la Empresa
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Sube el logo que aparecerá en las cotizaciones en formato PDF
+              </p>
+              <div className="bg-muted/30 rounded-lg p-6 border border-border">
+                {formData?.company?.logo?.url ? (
+                  <div className="flex flex-col md:flex-row items-start gap-4">
+                    <div className="flex-shrink-0">
+                      <img
+                        src={formData.company.logo.url}
+                        alt="Logo de la empresa"
+                        className="h-24 w-auto object-contain border border-border rounded-lg bg-white p-2"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-foreground mb-1">
+                        {formData.company.logo.fileName}
+                      </p>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Subido el {new Date(formData.company.logo.uploadedAt).toLocaleDateString('es-ES')}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        iconName="Trash2"
+                        onClick={() => handleChange('company', 'logo', null)}
+                      >
+                        Eliminar logo
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                      <Icon name="FileText" size={32} className="text-muted-foreground" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground mb-2">
+                      No hay logo configurado
+                    </p>
+                    <p className="text-xs text-muted-foreground mb-4 text-center max-w-sm">
+                      El logo aparecerá en la parte superior derecha de tus cotizaciones PDF
+                    </p>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/jpg"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          // Validar tamaño (max 2MB)
+                          if (file.size > 2 * 1024 * 1024) {
+                            alert('El archivo es demasiado grande. Tamaño máximo: 2MB');
+                            e.target.value = '';
+                            return;
+                          }
+
+                          // Crear URL temporal para preview
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            handleChange('company', 'logo', {
+                              url: reader.result,
+                              fileName: file.name,
+                              uploadedAt: new Date()
+                            });
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="hidden"
+                      id="logo-upload"
+                    />
+                    <Button
+                      variant="outline"
+                      iconName="Plus"
+                      iconPosition="left"
+                      onClick={() => document.getElementById('logo-upload').click()}
+                    >
+                      Subir Logo
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-3">
+                      PNG o JPG, máximo 2MB
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-heading font-semibold text-foreground mb-4">
+                Información de la Empresa
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Datos de tu empresa que aparecerán en las cotizaciones PDF
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Nombre de la empresa"
+                  type="text"
+                  value={formData?.company?.companyName || ''}
+                  onChange={(e) => handleChange('company', 'companyName', e?.target?.value)}
+                  placeholder="Ej: IPTEGRA SAS"
+                />
+                <Input
+                  label="Tipo de empresa"
+                  type="text"
+                  value={formData?.company?.companyType || ''}
+                  onChange={(e) => handleChange('company', 'companyType', e?.target?.value)}
+                  placeholder="Ej: PERSONA JURIDICA"
+                />
+                <Input
+                  label="NIT"
+                  type="text"
+                  value={formData?.company?.companyNit || ''}
+                  onChange={(e) => handleChange('company', 'companyNit', e?.target?.value)}
+                  placeholder="Ej: 900586103-1"
+                />
+                <Input
+                  label="Dirección"
+                  type="text"
+                  value={formData?.company?.companyAddress || ''}
+                  onChange={(e) => handleChange('company', 'companyAddress', e?.target?.value)}
+                  placeholder="Ej: Calle 70 A # 7-30"
+                />
+                <Input
+                  label="Ciudad"
+                  type="text"
+                  value={formData?.company?.companyCity || ''}
+                  onChange={(e) => handleChange('company', 'companyCity', e?.target?.value)}
+                  placeholder="Ej: Bogotá D.C., Colombia"
+                />
+                <Input
+                  label="Teléfono"
+                  type="text"
+                  value={formData?.company?.companyPhone || ''}
+                  onChange={(e) => handleChange('company', 'companyPhone', e?.target?.value)}
+                  placeholder="Ej: +57 (1) 234-5678"
+                />
+                <Input
+                  label="Sitio web"
+                  type="text"
+                  value={formData?.company?.companyWebsite || ''}
+                  onChange={(e) => handleChange('company', 'companyWebsite', e?.target?.value)}
+                  placeholder="Ej: www.iptegra.com"
+                  className="md:col-span-2"
+                />
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-heading font-semibold text-foreground mb-4">
+                Datos del Firmante de Cotizaciones
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Información de la persona que firma las cotizaciones
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Nombre completo"
+                  type="text"
+                  value={formData?.company?.quotationSigner?.name || ''}
+                  onChange={(e) => handleChange('company', 'quotationSigner', {
+                    ...formData?.company?.quotationSigner,
+                    name: e?.target?.value
+                  })}
+                  placeholder="Ej: Juan Pérez"
+                />
+                <Input
+                  label="Cargo"
+                  type="text"
+                  value={formData?.company?.quotationSigner?.position || ''}
+                  onChange={(e) => handleChange('company', 'quotationSigner', {
+                    ...formData?.company?.quotationSigner,
+                    position: e?.target?.value
+                  })}
+                  placeholder="Ej: Gerente General"
+                />
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-heading font-semibold text-foreground mb-4">
+                Configuración de Correo Electrónico
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Configura el servidor de correo para enviar cotizaciones y notificaciones
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Email de envío"
+                  type="email"
+                  value={formData?.company?.emailFrom || ''}
+                  onChange={(e) => handleChange('company', 'emailFrom', e?.target?.value)}
+                  placeholder="cotizaciones@iptegra.com"
+                  className="md:col-span-2"
+                  description="Email remitente. Los correos se enviarán como: Nombre de la Empresa <email>"
+                />
+                <Input
+                  label="Servidor SMTP"
+                  type="text"
+                  value={formData?.company?.emailHost || ''}
+                  onChange={(e) => handleChange('company', 'emailHost', e?.target?.value)}
+                  placeholder="smtp.gmail.com"
+                  description="Host del servidor SMTP"
+                />
+                <Input
+                  label="Puerto SMTP"
+                  type="number"
+                  value={formData?.company?.emailPort || ''}
+                  onChange={(e) => handleChange('company', 'emailPort', parseInt(e?.target?.value) || 587)}
+                  placeholder="587"
+                  description="Puerto del servidor (587 o 465)"
+                />
+                <Input
+                  label="Usuario SMTP"
+                  type="text"
+                  value={formData?.company?.emailUser || ''}
+                  onChange={(e) => handleChange('company', 'emailUser', e?.target?.value)}
+                  placeholder="usuario@iptegra.com"
+                  description="Usuario para autenticación"
+                />
+                <Input
+                  label="Contraseña SMTP"
+                  type="password"
+                  value={formData?.company?.emailPassword || ''}
+                  onChange={(e) => handleChange('company', 'emailPassword', e?.target?.value)}
+                  placeholder="••••••••"
+                  description="Contraseña o App Password"
+                />
+                <div className="md:col-span-2">
+                  <Checkbox
+                    label="Usar conexión segura (SSL/TLS)"
+                    checked={formData?.company?.emailSecure || false}
+                    onChange={(e) => handleChange('company', 'emailSecure', e?.target?.checked)}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 p-4 bg-muted/30 rounded-lg border border-border">
+                <p className="text-sm text-muted-foreground mb-3">
+                  Envía un correo de prueba para verificar que la configuración SMTP es correcta
+                </p>
+                <Button
+                  variant="outline"
+                  iconName="Send"
+                  iconPosition="left"
+                  onClick={async () => {
+                    try {
+                      // Primero guardar la configuración
+                      await handleSave();
+                      // Luego enviar correo de prueba
+                      const response = await systemConfigService.sendTestEmail('ludwigramirez@gmail.com');
+                      alert('✅ ' + response.message);
+                    } catch (error) {
+                      const errorMsg = error.response?.data?.details || error.response?.data?.error || error.message;
+                      alert('❌ Error al enviar correo de prueba: ' + errorMsg);
+                    }
+                  }}
+                >
+                  Enviar Correo de Prueba
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-heading font-semibold text-foreground mb-4">
+                Plantillas de Condiciones Comerciales
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Define plantillas reutilizables para las condiciones comerciales de tus cotizaciones
+              </p>
+              <div className="space-y-4">
+                {formData?.company?.commercialTermsTemplates?.map((template, index) => (
+                  <div key={template?.id || index} className="bg-muted/30 rounded-lg p-4 border border-border">
+                    <div className="flex items-start justify-between mb-3">
+                      <Input
+                        label="Nombre de la plantilla"
+                        type="text"
+                        value={template?.name || ''}
+                        onChange={(e) => {
+                          const updatedTemplates = [...(formData?.company?.commercialTermsTemplates || [])];
+                          updatedTemplates[index] = { ...template, name: e?.target?.value };
+                          handleChange('company', 'commercialTermsTemplates', updatedTemplates);
+                        }}
+                        className="flex-1"
+                      />
+                      <button
+                        onClick={() => {
+                          const updatedTemplates = formData?.company?.commercialTermsTemplates?.filter((_, i) => i !== index);
+                          handleChange('company', 'commercialTermsTemplates', updatedTemplates);
+                        }}
+                        className="ml-3 mt-6 p-2 text-error hover:bg-error/10 rounded-lg transition-colors"
+                        title="Eliminar plantilla"
+                      >
+                        <Icon name="Trash2" size={18} />
+                      </button>
+                    </div>
+                    <textarea
+                      value={template?.content || ''}
+                      onChange={(e) => {
+                        const updatedTemplates = [...(formData?.company?.commercialTermsTemplates || [])];
+                        updatedTemplates[index] = { ...template, content: e?.target?.value };
+                        handleChange('company', 'commercialTermsTemplates', updatedTemplates);
+                      }}
+                      rows={4}
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground font-caption text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                      placeholder="Ej: Forma de pago: 50% anticipo, 50% contra entrega..."
+                    />
+                    <div className="mt-3">
+                      <Checkbox
+                        label="Usar como plantilla por defecto"
+                        checked={template?.isDefault || false}
+                        onChange={(e) => {
+                          const updatedTemplates = formData?.company?.commercialTermsTemplates?.map((t, i) => ({
+                            ...t,
+                            isDefault: i === index ? e?.target?.checked : false
+                          }));
+                          handleChange('company', 'commercialTermsTemplates', updatedTemplates);
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  iconName="Plus"
+                  iconPosition="left"
+                  onClick={() => {
+                    const newTemplate = {
+                      id: `template-${Date.now()}`,
+                      name: '',
+                      content: '',
+                      isDefault: false
+                    };
+                    handleChange('company', 'commercialTermsTemplates', [
+                      ...(formData?.company?.commercialTermsTemplates || []),
+                      newTemplate
+                    ]);
+                  }}
+                >
+                  Agregar Plantilla
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-heading font-semibold text-foreground mb-4">
+                Plantillas de Observaciones
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Define plantillas reutilizables para las observaciones de tus cotizaciones
+              </p>
+              <div className="space-y-4">
+                {formData?.company?.observationsTemplates?.map((template, index) => (
+                  <div key={template?.id || index} className="bg-muted/30 rounded-lg p-4 border border-border">
+                    <div className="flex items-start justify-between mb-3">
+                      <Input
+                        label="Nombre de la plantilla"
+                        type="text"
+                        value={template?.name || ''}
+                        onChange={(e) => {
+                          const updatedTemplates = [...(formData?.company?.observationsTemplates || [])];
+                          updatedTemplates[index] = { ...template, name: e?.target?.value };
+                          handleChange('company', 'observationsTemplates', updatedTemplates);
+                        }}
+                        className="flex-1"
+                      />
+                      <button
+                        onClick={() => {
+                          const updatedTemplates = formData?.company?.observationsTemplates?.filter((_, i) => i !== index);
+                          handleChange('company', 'observationsTemplates', updatedTemplates);
+                        }}
+                        className="ml-3 mt-6 p-2 text-error hover:bg-error/10 rounded-lg transition-colors"
+                        title="Eliminar plantilla"
+                      >
+                        <Icon name="Trash2" size={18} />
+                      </button>
+                    </div>
+                    <textarea
+                      value={template?.content || ''}
+                      onChange={(e) => {
+                        const updatedTemplates = [...(formData?.company?.observationsTemplates || [])];
+                        updatedTemplates[index] = { ...template, content: e?.target?.value };
+                        handleChange('company', 'observationsTemplates', updatedTemplates);
+                      }}
+                      rows={3}
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground font-caption text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                      placeholder="Ej: Cotización válida por 30 días..."
+                    />
+                    <div className="mt-3">
+                      <Checkbox
+                        label="Usar como plantilla por defecto"
+                        checked={template?.isDefault || false}
+                        onChange={(e) => {
+                          const updatedTemplates = formData?.company?.observationsTemplates?.map((t, i) => ({
+                            ...t,
+                            isDefault: i === index ? e?.target?.checked : false
+                          }));
+                          handleChange('company', 'observationsTemplates', updatedTemplates);
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  iconName="Plus"
+                  iconPosition="left"
+                  onClick={() => {
+                    const newTemplate = {
+                      id: `template-${Date.now()}`,
+                      name: '',
+                      content: '',
+                      isDefault: false
+                    };
+                    handleChange('company', 'observationsTemplates', [
+                      ...(formData?.company?.observationsTemplates || []),
+                      newTemplate
+                    ]);
+                  }}
+                >
+                  Agregar Plantilla
+                </Button>
               </div>
             </div>
           </div>

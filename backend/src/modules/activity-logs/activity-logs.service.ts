@@ -270,4 +270,14 @@ export class ActivityLogsService {
       throw error;
     }
   }
+
+  /**
+   * Alias for create() - for backward compatibility
+   */
+  static async log(data: CreateActivityLogDTO): Promise<void> {
+    return this.create(data);
+  }
 }
+
+// Export instance for backward compatibility
+export const activityLogsService = ActivityLogsService;

@@ -9,10 +9,17 @@ import type {
   SkillConfig,
   CreateSkillDTO,
   UpdateSkillDTO,
+  CompanyConfig,
+  UpdateCompanyConfigDTO,
 } from './system-config.types';
 
 const ROLES_CONFIG_KEY = 'system_roles';
 const SKILLS_CONFIG_KEY = 'system_skills';
+const COMPANY_CONFIG_KEY = 'company_config';
+const GENERAL_CONFIG_KEY = 'general_config';
+const PRODUCTS_CONFIG_KEY = 'products_config';
+const CLIENTS_CONFIG_KEY = 'clients_config';
+const OKRS_CONFIG_KEY = 'okrs_config';
 
 export class SystemConfigService {
   // ============================================
@@ -320,6 +327,213 @@ export class SystemConfigService {
   }
 
   // ============================================
+  // COMPANY CONFIGURATION
+  // ============================================
+
+  /**
+   * Get company configuration
+   */
+  static async getCompanyConfig(): Promise<CompanyConfig> {
+    try {
+      const config = await prisma.systemConfig.findUnique({
+        where: { key: COMPANY_CONFIG_KEY },
+      });
+
+      if (!config) {
+        // Create default company config if doesn't exist
+        const defaultConfig = this.getDefaultCompanyConfig();
+        await prisma.systemConfig.create({
+          data: {
+            key: COMPANY_CONFIG_KEY,
+            value: defaultConfig,
+          },
+        });
+        logger.info('Default company config created in database');
+        return defaultConfig;
+      }
+
+      return config.value as CompanyConfig;
+    } catch (error) {
+      logger.error('Error getting company config:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update company configuration
+   */
+  static async updateCompanyConfig(data: UpdateCompanyConfigDTO): Promise<CompanyConfig> {
+    try {
+      const currentConfig = await this.getCompanyConfig();
+
+      const updatedConfig: CompanyConfig = {
+        ...currentConfig,
+        ...data,
+      };
+
+      await prisma.systemConfig.upsert({
+        where: { key: COMPANY_CONFIG_KEY },
+        update: { value: updatedConfig },
+        create: { key: COMPANY_CONFIG_KEY, value: updatedConfig },
+      });
+
+      logger.info('Company config updated');
+      return updatedConfig;
+    } catch (error) {
+      logger.error('Error updating company config:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update company logo
+   */
+  static async updateCompanyLogo(logoData: { url: string; fileName: string }): Promise<CompanyConfig> {
+    try {
+      const currentConfig = await this.getCompanyConfig();
+
+      const updatedConfig: CompanyConfig = {
+        ...currentConfig,
+        logo: {
+          url: logoData.url,
+          fileName: logoData.fileName,
+          uploadedAt: new Date(),
+        },
+      };
+
+      await prisma.systemConfig.update({
+        where: { key: COMPANY_CONFIG_KEY },
+        data: { value: updatedConfig },
+      });
+
+      logger.info('Company logo updated');
+      return updatedConfig;
+    } catch (error) {
+      logger.error('Error updating company logo:', error);
+      throw error;
+    }
+  }
+
+  // ============================================
+  // GENERAL CONFIGURATION METHODS
+  // ============================================
+
+  /**
+   * Get any configuration by key
+   */
+  static async getConfig(key: string): Promise<any> {
+    try {
+      const config = await prisma.systemConfig.findUnique({
+        where: { key },
+      });
+
+      return config?.value || null;
+    } catch (error) {
+      logger.error(`Error getting config ${key}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update any configuration by key
+   */
+  static async updateConfig(key: string, value: any): Promise<any> {
+    try {
+      await prisma.systemConfig.upsert({
+        where: { key },
+        update: { value },
+        create: { key, value },
+      });
+
+      logger.info(`Config updated: ${key}`);
+      return value;
+    } catch (error) {
+      logger.error(`Error updating config ${key}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get general configuration
+   */
+  static async getGeneralConfig(): Promise<any> {
+    return this.getConfig(GENERAL_CONFIG_KEY);
+  }
+
+  /**
+   * Update general configuration
+   */
+  static async updateGeneralConfig(data: any): Promise<any> {
+    return this.updateConfig(GENERAL_CONFIG_KEY, data);
+  }
+
+  /**
+   * Get products configuration
+   */
+  static async getProductsConfig(): Promise<any> {
+    return this.getConfig(PRODUCTS_CONFIG_KEY);
+  }
+
+  /**
+   * Update products configuration
+   */
+  static async updateProductsConfig(data: any): Promise<any> {
+    return this.updateConfig(PRODUCTS_CONFIG_KEY, data);
+  }
+
+  /**
+   * Get clients configuration
+   */
+  static async getClientsConfig(): Promise<any> {
+    return this.getConfig(CLIENTS_CONFIG_KEY);
+  }
+
+  /**
+   * Update clients configuration
+   */
+  static async updateClientsConfig(data: any): Promise<any> {
+    return this.updateConfig(CLIENTS_CONFIG_KEY, data);
+  }
+
+  /**
+   * Get OKRs configuration
+   */
+  static async getOkrsConfig(): Promise<any> {
+    return this.getConfig(OKRS_CONFIG_KEY);
+  }
+
+  /**
+   * Update OKRs configuration
+   */
+  static async updateOkrsConfig(data: any): Promise<any> {
+    return this.updateConfig(OKRS_CONFIG_KEY, data);
+  }
+
+  /**
+   * Get all system configuration
+   */
+  static async getAllConfig(): Promise<any> {
+    try {
+      const general = await this.getGeneralConfig();
+      const products = await this.getProductsConfig();
+      const clients = await this.getClientsConfig();
+      const company = await this.getCompanyConfig();
+      const okrs = await this.getOkrsConfig();
+
+      return {
+        general,
+        products,
+        clients,
+        company,
+        okrs,
+      };
+    } catch (error) {
+      logger.error('Error getting all config:', error);
+      throw error;
+    }
+  }
+
+  // ============================================
   // HELPERS
   // ============================================
 
@@ -444,5 +658,30 @@ export class SystemConfigService {
       { id: 'skill-49', name: 'WebSockets', description: 'Real-time communication', category: 'API' },
       { id: 'skill-50', name: 'Microservices', description: 'Microservices architecture', category: 'Architecture' },
     ];
+  }
+
+  private static getDefaultCompanyConfig(): CompanyConfig {
+    return {
+      quotationSigner: {
+        name: 'IPTEGRA SAS',
+        position: 'Gerente General',
+      },
+      commercialTermsTemplates: [
+        {
+          id: this.generateId(),
+          name: 'Condiciones Estándar',
+          content: 'Forma de pago: 50% anticipo, 50% contra entrega\nTiempo de entrega: Según especificaciones\nGarantía: 12 meses contra defectos de fábrica',
+          isDefault: true,
+        },
+      ],
+      observationsTemplates: [
+        {
+          id: this.generateId(),
+          name: 'Observaciones Estándar',
+          content: 'Cotización válida por 30 días\nPrecios sujetos a cambio sin previo aviso\nNo incluye instalación',
+          isDefault: true,
+        },
+      ],
+    };
   }
 }

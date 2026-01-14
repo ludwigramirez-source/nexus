@@ -72,4 +72,71 @@ router.put('/skills/:id', SystemConfigController.updateSkill);
  */
 router.delete('/skills/:id', SystemConfigController.deleteSkill);
 
+// ============================================
+// COMPANY CONFIGURATION ROUTES
+// ============================================
+
+/**
+ * @route   GET /api/system-config/company
+ * @desc    Get company configuration
+ * @access  Private (CEO, DEV_DIRECTOR)
+ */
+router.get('/company', SystemConfigController.getCompanyConfig);
+
+/**
+ * @route   PUT /api/system-config/company
+ * @desc    Update company configuration
+ * @access  Private (CEO, DEV_DIRECTOR)
+ */
+router.put('/company', SystemConfigController.updateCompanyConfig);
+
+/**
+ * @route   GET /api/system-config/all
+ * @desc    Get all system configuration
+ * @access  Private (CEO, DEV_DIRECTOR)
+ */
+router.get('/all', SystemConfigController.getAllConfig);
+
+/**
+ * @route   PUT /api/system-config/general
+ * @desc    Update general configuration
+ * @access  Private (CEO, DEV_DIRECTOR)
+ */
+router.put('/general', SystemConfigController.updateGeneralConfig);
+
+/**
+ * @route   PUT /api/system-config/products
+ * @desc    Update products configuration
+ * @access  Private (CEO, DEV_DIRECTOR)
+ */
+router.put('/products', SystemConfigController.updateProductsConfig);
+
+/**
+ * @route   PUT /api/system-config/clients
+ * @desc    Update clients configuration
+ * @access  Private (CEO, DEV_DIRECTOR)
+ */
+router.put('/clients', SystemConfigController.updateClientsConfig);
+
+/**
+ * @route   PUT /api/system-config/okrs
+ * @desc    Update OKRs configuration
+ * @access  Private (CEO, DEV_DIRECTOR)
+ */
+router.put('/okrs', SystemConfigController.updateOkrsConfig);
+
+/**
+ * @route   POST /api/system-config/test-email-connection
+ * @desc    Test SMTP connection
+ * @access  Private (CEO, DEV_DIRECTOR)
+ */
+router.post('/test-email-connection', SystemConfigController.testEmailConnection);
+
+/**
+ * @route   POST /api/system-config/send-test-email
+ * @desc    Send test email
+ * @access  Private (CEO, DEV_DIRECTOR)
+ */
+router.post('/send-test-email', SystemConfigController.sendTestEmail);
+
 export default router;

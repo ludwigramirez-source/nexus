@@ -19,6 +19,7 @@ import aiRoutes from './modules/ai/ai.routes';
 import systemConfigRoutes from './modules/system-config/system-config.routes';
 import activityLogsRoutes from './modules/activity-logs/activity-logs.routes';
 import dashboardRoutes from './modules/dashboard/dashboard.routes';
+import quotationsRoutes from './modules/quotations/quotations.routes';
 
 const app = express();
 
@@ -36,9 +37,9 @@ app.use(
   })
 );
 
-// Body parser
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Body parser - Increased limit for base64 images
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
 // Request logging
@@ -66,6 +67,7 @@ app.use(`${API_PREFIX}/ai`, aiRoutes);
 app.use(`${API_PREFIX}/system-config`, systemConfigRoutes);
 app.use(`${API_PREFIX}/activity-logs`, activityLogsRoutes);
 app.use(`${API_PREFIX}/dashboard`, dashboardRoutes);
+app.use(`${API_PREFIX}/quotations`, quotationsRoutes);
 
 // Error handling
 app.use(errorHandler);

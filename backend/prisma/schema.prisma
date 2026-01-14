@@ -28,13 +28,14 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  assignedRequests Request[]         @relation("AssignedUsers")
-  activities       RequestActivity[]
-  comments         Comment[]
-  assignments      Assignment[]
-  ownedOKRs        OKR[]
-  sessions         Session[]
-  activityLogs     ActivityLog[]
+  assignedRequests  Request[]         @relation("AssignedUsers")
+  activities        RequestActivity[]
+  comments          Comment[]
+  assignments       Assignment[]
+  ownedOKRs         OKR[]
+  sessions          Session[]
+  activityLogs      ActivityLog[]
+  createdQuotations Quotation[]
 
   @@map("users")
 }
@@ -301,8 +302,9 @@ model Product {
   createdAt     DateTime            @default(now()) @map("created_at")
   updatedAt     DateTime            @updatedAt @map("updated_at")
 
-  roadmapItems RoadmapItem[]
-  requests     Request[]
+  roadmapItems   RoadmapItem[]
+  requests       Request[]
+  quotationItems QuotationItem[]
 
   @@map("products")
 }
@@ -391,7 +393,8 @@ model Client {
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
-  requests Request[]
+  requests   Request[]
+  quotations Quotation[]
 
   @@map("clients")
 }
@@ -406,6 +409,78 @@ enum ClientStatus {
   ACTIVE
   CHURNED
   AT_RISK
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CONVERTED_TO_ORDER
+}
+
+// ============================================
+// QUOTATIONS
+// ============================================
+
+model Quotation {
+  id                String            @id @default(cuid())
+  quotationNumber   String            @unique @map("quotation_number")
+  clientId          String            @map("client_id")
+  createdByUserId   String            @map("created_by_user_id")
+  status            QuotationStatus   @default(DRAFT)
+  validUntil        DateTime?         @map("valid_until")
+  totalAmount       Float             @default(0) @map("total_amount")
+  currency          String            @default("USD")
+  subtotal          Float             @default(0)
+  taxAmount         Float             @default(0) @map("tax_amount")
+  discountAmount    Float             @default(0) @map("discount_amount")
+  deliveryTime      String?           @map("delivery_time")
+  paymentTerms      String?           @db.Text @map("payment_terms")
+  warranty          String?           @map("warranty")
+  observations      String?           @db.Text
+  internalNotes     String?           @db.Text @map("internal_notes")
+  sentAt            DateTime?         @map("sent_at")
+  acceptedAt        DateTime?         @map("accepted_at")
+  rejectedAt        DateTime?         @map("rejected_at")
+  rejectionReason   String?           @db.Text @map("rejection_reason")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  client         Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdByUser  User            @relation(fields: [createdByUserId], references: [id])
+  quotationItems QuotationItem[]
+
+  @@index([clientId])
+  @@index([createdByUserId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("quotations")
+}
+
+model QuotationItem {
+  id           String             @id @default(cuid())
+  quotationId  String             @map("quotation_id")
+  productId    String             @map("product_id")
+  quantity     Float              @default(1)
+  unitPrice    Float              @map("unit_price")
+  description  String?            @db.Text
+  discount     Float              @default(0)
+  subtotal     Float              @default(0)
+  taxAmount    Float              @default(0) @map("tax_amount")
+  total        Float              @default(0)
+  recurrence   BillingRecurrence?
+  deliveryTime String?            @map("delivery_time")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id])
+
+  @@index([quotationId])
+  @@index([productId])
+  @@map("quotation_items")
 }
 
 // ============================================

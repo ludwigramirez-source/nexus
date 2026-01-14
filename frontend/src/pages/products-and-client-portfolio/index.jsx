@@ -2,6 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { productService } from '../../services/productService';
 import { clientService } from '../../services/clientService';
 import { dashboardService } from '../../services/dashboardService';
+import { quotationService } from '../../services/quotationService';
+import { systemConfigService } from '../../services/systemConfigService';
+import { downloadQuotationPDF } from '../../utils/pdfGenerator';
 import socketService from '../../services/socketService';
 import Sidebar from '../../components/ui/Sidebar';
 import UserProfileHeader from '../../components/ui/UserProfileHeader';
@@ -25,11 +28,15 @@ import ActivityLogSidebar from './components/ActivityLogSidebar';
 import DashboardMetricsCards from './components/DashboardMetricsCards';
 import ProductCardList from './components/ProductCardList';
 import ClientsByProductTable from './components/ClientsByProductTable';
+import QuotationModal from './components/QuotationModal';
+import QuotationsTable from './components/QuotationsTable';
+import QuotationFilterToolbar from './components/QuotationFilterToolbar';
+import SendEmailModal from './components/SendEmailModal';
 import * as XLSX from 'xlsx';
 
 const ProductsAndClientPortfolio = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState('products'); // products, clients, dashboard
+  const [activeTab, setActiveTab] = useState('products'); // products, clients, quotations, dashboard
   const [selectedClients, setSelectedClients] = useState([]);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isProductEditModalOpen, setIsProductEditModalOpen] = useState(false);
@@ -61,22 +68,43 @@ const ProductsAndClientPortfolio = () => {
   const [selectedDashboardProduct, setSelectedDashboardProduct] = useState(null);
   const [selectedProductClients, setSelectedProductClients] = useState([]);
 
+  // Quotation states
+  const [quotations, setQuotations] = useState([]);
+  const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
+  const [selectedQuotation, setSelectedQuotation] = useState(null);
+  const [quotationFilters, setQuotationFilters] = useState({
+    status: 'all',
+    clientId: 'all',
+    dateRange: 'all',
+    dateFrom: null,
+    dateTo: null,
+    search: ''
+  });
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [selectedQuotationForEmail, setSelectedQuotationForEmail] = useState(null);
+  const [companyConfig, setCompanyConfig] = useState(null);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
 
-        const [productsData, clientsData] = await Promise.all([
+        const [productsData, clientsData, companyConfigResponse, quotationsData] = await Promise.all([
           productService.getAll(),
-          clientService.getAll()
+          clientService.getAll(),
+          systemConfigService.getCompanyConfig(),
+          quotationService.getAll()
         ]);
 
         setProducts(productsData.data || []);
         setClients(clientsData.data || []);
+        setCompanyConfig(companyConfigResponse?.data || null);
+        setQuotations(quotationsData || []);
       } catch (error) {
         console.error('Error loading data:', error);
         setProducts([]);
         setClients([]);
+        setQuotations([]);
       } finally {
         setLoading(false);
       }
@@ -134,6 +162,40 @@ const ProductsAndClientPortfolio = () => {
 
     fetchDashboardData();
   }, [activeTab]);
+
+  // Fetch quotations data when quotations tab is active or filters change
+  useEffect(() => {
+    const fetchQuotations = async () => {
+      if (activeTab === 'quotations') {
+        try {
+          const filters = {};
+          if (quotationFilters.status && quotationFilters.status !== 'all') {
+            filters.status = quotationFilters.status;
+          }
+          if (quotationFilters.clientId && quotationFilters.clientId !== 'all') {
+            filters.clientId = quotationFilters.clientId;
+          }
+          if (quotationFilters.dateFrom) {
+            filters.dateFrom = quotationFilters.dateFrom;
+          }
+          if (quotationFilters.dateTo) {
+            filters.dateTo = quotationFilters.dateTo;
+          }
+          if (quotationFilters.search) {
+            filters.search = quotationFilters.search;
+          }
+
+          const quotationsData = await quotationService.getAll(filters);
+          setQuotations(quotationsData || []);
+        } catch (error) {
+          console.error('Error loading quotations:', error);
+          setQuotations([]);
+        }
+      }
+    };
+
+    fetchQuotations();
+  }, [activeTab, quotationFilters]);
 
   const filteredProducts = useMemo(() => {
     return products?.filter(product => {
@@ -518,6 +580,193 @@ const ProductsAndClientPortfolio = () => {
     }
   };
 
+  // Quotation handlers
+  const handleCreateQuotation = async (quotationData) => {
+    try {
+      await quotationService.create(quotationData);
+      // Reload quotations list to get the correct format
+      const quotationsData = await quotationService.getAll(quotationFilters);
+      setQuotations(quotationsData || []);
+      setIsQuotationModalOpen(false);
+      setSelectedQuotation(null);
+      alert('Cotización creada exitosamente');
+    } catch (error) {
+      console.error('Error creating quotation:', error);
+      if (error.response?.status === 401) {
+        alert('Tu sesión ha expirado. Por favor, refresca la página e intenta nuevamente.');
+      }
+      throw error;
+    }
+  };
+
+  const handleEditQuotation = (quotation) => {
+    setSelectedQuotation(quotation);
+    setIsQuotationModalOpen(true);
+  };
+
+  const handleUpdateQuotation = async (quotationData) => {
+    try {
+      await quotationService.update(selectedQuotation.id, quotationData);
+      // Reload quotations list to get the correct format with clientName
+      const filters = {};
+      if (quotationFilters.status && quotationFilters.status !== 'all') {
+        filters.status = quotationFilters.status;
+      }
+      if (quotationFilters.clientId && quotationFilters.clientId !== 'all') {
+        filters.clientId = quotationFilters.clientId;
+      }
+      if (quotationFilters.dateFrom) {
+        filters.dateFrom = quotationFilters.dateFrom;
+      }
+      if (quotationFilters.dateTo) {
+        filters.dateTo = quotationFilters.dateTo;
+      }
+      if (quotationFilters.search) {
+        filters.search = quotationFilters.search;
+      }
+      const quotationsData = await quotationService.getAll(filters);
+      setQuotations(quotationsData || []);
+      setIsQuotationModalOpen(false);
+      setSelectedQuotation(null);
+      alert('Cotización actualizada exitosamente');
+    } catch (error) {
+      console.error('Error updating quotation:', error);
+      throw error;
+    }
+  };
+
+  const handleSaveQuotation = async (quotationData) => {
+    if (selectedQuotation) {
+      await handleUpdateQuotation(quotationData);
+    } else {
+      await handleCreateQuotation(quotationData);
+    }
+  };
+
+  const handleViewQuotation = async (quotation) => {
+    try {
+      const fullQuotation = await quotationService.getById(quotation.id);
+      setSelectedQuotation(fullQuotation);
+      setIsQuotationModalOpen(true);
+    } catch (error) {
+      console.error('Error fetching quotation:', error);
+      alert('Error al cargar la cotización');
+    }
+  };
+
+  const handleDeleteQuotation = async (quotationId) => {
+    if (!confirm('¿Está seguro de eliminar esta cotización?')) return;
+
+    try {
+      await quotationService.delete(quotationId);
+      setQuotations(quotations.filter(q => q.id !== quotationId));
+      alert('Cotización eliminada exitosamente');
+    } catch (error) {
+      console.error('Error deleting quotation:', error);
+      alert('Error al eliminar la cotización');
+    }
+  };
+
+  const handleDuplicateQuotation = async (quotationId) => {
+    try {
+      const result = await quotationService.duplicate(quotationId);
+      // Reload quotations list to get the correct format with clientName
+      const filters = {};
+      if (quotationFilters.status && quotationFilters.status !== 'all') {
+        filters.status = quotationFilters.status;
+      }
+      if (quotationFilters.clientId && quotationFilters.clientId !== 'all') {
+        filters.clientId = quotationFilters.clientId;
+      }
+      if (quotationFilters.dateFrom) {
+        filters.dateFrom = quotationFilters.dateFrom;
+      }
+      if (quotationFilters.dateTo) {
+        filters.dateTo = quotationFilters.dateTo;
+      }
+      if (quotationFilters.search) {
+        filters.search = quotationFilters.search;
+      }
+      const quotationsData = await quotationService.getAll(filters);
+      setQuotations(quotationsData || []);
+      alert(`Cotización duplicada exitosamente: ${result.quotationNumber}`);
+    } catch (error) {
+      console.error('Error duplicating quotation:', error);
+      alert('Error al duplicar la cotización');
+    }
+  };
+
+  const handleDownloadPDF = async (quotationId) => {
+    try {
+      // Obtener la cotización completa con todos los detalles
+      const quotation = await quotationService.getById(quotationId);
+
+      if (!quotation) {
+        throw new Error('Cotización no encontrada');
+      }
+
+      // Obtener la configuración de empresa para el PDF
+      const companyConfigResponse = await systemConfigService.getCompanyConfig();
+      const companyConfig = companyConfigResponse?.data || {};
+
+      // Generar y descargar el PDF
+      await downloadQuotationPDF(quotation, companyConfig);
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      alert('Error al generar el PDF. Por favor intenta nuevamente.');
+    }
+  };
+
+  const handleSendQuotationEmail = async (quotation) => {
+    try {
+      // Obtener la cotización completa con todos los detalles (items, productos, etc.)
+      const fullQuotation = await quotationService.getById(quotation.id);
+
+      if (!fullQuotation) {
+        throw new Error('Cotización no encontrada');
+      }
+
+      setSelectedQuotationForEmail(fullQuotation);
+      setIsEmailModalOpen(true);
+    } catch (error) {
+      console.error('Error loading quotation:', error);
+      alert('Error al cargar la cotización. Por favor intenta nuevamente.');
+    }
+  };
+
+  const handleUpdateQuotationStatus = async (quotationId, newStatus) => {
+    try {
+      await quotationService.updateStatus(quotationId, newStatus);
+      // Refresh quotations
+      const filters = {};
+      if (quotationFilters.status && quotationFilters.status !== 'all') {
+        filters.status = quotationFilters.status;
+      }
+      if (quotationFilters.clientId && quotationFilters.clientId !== 'all') {
+        filters.clientId = quotationFilters.clientId;
+      }
+      if (quotationFilters.dateFrom) {
+        filters.dateFrom = quotationFilters.dateFrom;
+      }
+      if (quotationFilters.dateTo) {
+        filters.dateTo = quotationFilters.dateTo;
+      }
+      if (quotationFilters.search) {
+        filters.search = quotationFilters.search;
+      }
+      const quotationsData = await quotationService.getAll(filters);
+      setQuotations(quotationsData || []);
+      alert('Estado de cotización actualizado exitosamente');
+    } catch (error) {
+      console.error('Error updating quotation status:', error);
+      alert('Error al actualizar el estado de la cotización');
+    }
+  };
+
+  const handleQuotationFilterChange = (newFilters) => {
+    setQuotationFilters(newFilters);
+  };
+
   const getSortIcon = (key) => {
     if (sortConfig?.key !== key) return 'ChevronsUpDown';
     return sortConfig?.direction === 'asc' ? 'ChevronUp' : 'ChevronDown';
@@ -549,8 +798,9 @@ const ProductsAndClientPortfolio = () => {
           </div>
         </header>
 
-        <div className="flex h-[calc(100vh-73px)]">
-          <main className="flex-1 overflow-y-auto px-4 md:px-6 lg:px-8 py-6 md:py-8">
+        <main className="px-4 md:px-6 lg:px-8 py-6 md:py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className={activeTab !== 'dashboard' && activeTab !== 'quotations' ? 'lg:col-span-9' : 'lg:col-span-12'}>
           <Breadcrumb />
 
           {/* Tabs Navigation */}
@@ -589,6 +839,22 @@ const ProductsAndClientPortfolio = () => {
                 </div>
               </button>
               <button
+                onClick={() => setActiveTab('quotations')}
+                className={`pb-4 px-1 border-b-2 font-medium text-sm transition-smooth ${
+                  activeTab === 'quotations'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <Icon name="FileText" size={18} />
+                  <span>Cotizaciones</span>
+                  <span className="bg-muted text-muted-foreground px-2 py-0.5 rounded-full text-xs">
+                    {quotations?.length || 0}
+                  </span>
+                </div>
+              </button>
+              <button
                 onClick={() => setActiveTab('dashboard')}
                 className={`pb-4 px-1 border-b-2 font-medium text-sm transition-smooth ${
                   activeTab === 'dashboard'
@@ -607,19 +873,18 @@ const ProductsAndClientPortfolio = () => {
           {/* Tab: Productos & Servicios */}
           {activeTab === 'products' && (
             <div>
-              <ProductFilterToolbar
-                onFilterChange={handleProductFilterChange}
-                activeFilters={productFilters}
-              />
-
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg md:text-xl font-heading font-semibold text-foreground">
-                  Productos & Servicios ({sortedProducts?.length})
-                </h2>
-                <div className="flex items-center space-x-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-heading font-semibold text-foreground">
+                    Gestión de Productos y Servicios
+                  </h2>
+                  <p className="text-sm md:text-base font-caption text-muted-foreground mt-1">
+                    Administra el catálogo de productos y servicios ofrecidos
+                  </p>
+                </div>
+                <div className="flex gap-2 flex-wrap">
                   <Button
                     variant="outline"
-                    size="sm"
                     iconName="Download"
                     iconPosition="left"
                     onClick={handleExportProductsToExcel}
@@ -628,15 +893,19 @@ const ProductsAndClientPortfolio = () => {
                   </Button>
                   <Button
                     variant="default"
-                    size="sm"
                     iconName="Plus"
                     iconPosition="left"
                     onClick={() => setIsProductModalOpen(true)}
                   >
-                    Nuevo
+                    Nuevo Producto
                   </Button>
                 </div>
               </div>
+
+              <ProductFilterToolbar
+                onFilterChange={handleProductFilterChange}
+                activeFilters={productFilters}
+              />
 
               <div className="bg-card border border-border rounded-lg overflow-hidden">
                 <div className="overflow-x-auto">
@@ -714,18 +983,18 @@ const ProductsAndClientPortfolio = () => {
           {/* Tab: Clientes */}
           {activeTab === 'clients' && (
             <div>
-              <FilterToolbar
-                onFilterChange={handleFilterChange}
-              />
-
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg md:text-xl font-heading font-semibold text-foreground">
-                  Clientes ({sortedClients?.length})
-                </h2>
-                <div className="flex items-center space-x-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-heading font-semibold text-foreground">
+                    Gestión de Clientes
+                  </h2>
+                  <p className="text-sm md:text-base font-caption text-muted-foreground mt-1">
+                    Administra la cartera de clientes y sus relaciones comerciales
+                  </p>
+                </div>
+                <div className="flex gap-2 flex-wrap">
                   <Button
                     variant="outline"
-                    size="sm"
                     iconName="Download"
                     iconPosition="left"
                     onClick={handleExportToExcel}
@@ -734,7 +1003,6 @@ const ProductsAndClientPortfolio = () => {
                   </Button>
                   <Button
                     variant="default"
-                    size="sm"
                     iconName="Plus"
                     iconPosition="left"
                     onClick={() => setIsClientModalOpen(true)}
@@ -743,6 +1011,10 @@ const ProductsAndClientPortfolio = () => {
                   </Button>
                 </div>
               </div>
+
+              <FilterToolbar
+                onFilterChange={handleFilterChange}
+              />
 
               <div className="bg-card border border-border rounded-lg overflow-hidden">
                 <div className="overflow-x-auto">
@@ -832,6 +1104,49 @@ const ProductsAndClientPortfolio = () => {
             </div>
           )}
 
+          {/* Tab: Cotizaciones */}
+          {activeTab === 'quotations' && (
+            <div>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-heading font-semibold text-foreground">
+                    Gestión de Cotizaciones
+                  </h2>
+                  <p className="text-sm md:text-base font-caption text-muted-foreground mt-1">
+                    Crea, envía y gestiona cotizaciones para tus clientes
+                  </p>
+                </div>
+                <Button
+                  variant="default"
+                  iconName="Plus"
+                  iconPosition="left"
+                  onClick={() => {
+                    setSelectedQuotation(null);
+                    setIsQuotationModalOpen(true);
+                  }}
+                >
+                  Nueva Cotización
+                </Button>
+              </div>
+
+              <QuotationFilterToolbar
+                onFilterChange={handleQuotationFilterChange}
+                activeFilters={quotationFilters}
+                clients={clients}
+              />
+
+              <QuotationsTable
+                quotations={quotations}
+                onView={handleViewQuotation}
+                onSendEmail={handleSendQuotationEmail}
+                onDelete={handleDeleteQuotation}
+                onDuplicate={handleDuplicateQuotation}
+                onDownloadPDF={handleDownloadPDF}
+                onUpdateStatus={handleUpdateQuotationStatus}
+              />
+            </div>
+          )}
+
           {/* Tab: Dashboard */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
@@ -859,11 +1174,16 @@ const ProductsAndClientPortfolio = () => {
               </div>
             </div>
           )}
-          </main>
+            </div>
 
-          {/* Activity Log Sidebar - Hidden on Dashboard tab */}
-          {activeTab !== 'dashboard' && <ActivityLogSidebar />}
-        </div>
+            {/* Activity Log Sidebar - Hidden on Dashboard and Quotations tabs */}
+            {activeTab !== 'dashboard' && activeTab !== 'quotations' && (
+              <div className="lg:col-span-3">
+                <ActivityLogSidebar />
+              </div>
+            )}
+          </div>
+        </main>
       </div>
       <BulkOperationsBar
         selectedCount={selectedClients?.length}
@@ -905,6 +1225,50 @@ const ProductsAndClientPortfolio = () => {
         onSave={handleSaveClientEdit}
         client={selectedClientForEdit}
         products={products}
+      />
+      <QuotationModal
+        isOpen={isQuotationModalOpen}
+        onClose={() => {
+          setIsQuotationModalOpen(false);
+          setSelectedQuotation(null);
+        }}
+        onSave={handleSaveQuotation}
+        quotation={selectedQuotation}
+        clients={clients}
+        products={products}
+        onCreateClient={() => {
+          setIsQuotationModalOpen(false);
+          setIsClientModalOpen(true);
+        }}
+      />
+      <SendEmailModal
+        isOpen={isEmailModalOpen}
+        onClose={() => {
+          setIsEmailModalOpen(false);
+          setSelectedQuotationForEmail(null);
+        }}
+        quotation={selectedQuotationForEmail}
+        companyConfig={companyConfig}
+        onSend={async (emailData) => {
+          try {
+            await quotationService.sendEmail(emailData.quotationId, {
+              to: emailData.to,
+              cc: emailData.cc,
+              bcc: emailData.bcc,
+              subject: emailData.subject,
+              body: emailData.body,
+              pdfAttachment: emailData.pdfAttachment
+            });
+            alert('Cotización enviada exitosamente por correo electrónico');
+            // Update status to SENT if it was DRAFT
+            if (selectedQuotationForEmail?.status === 'DRAFT') {
+              await handleUpdateQuotationStatus(selectedQuotationForEmail.id, 'SENT');
+            }
+          } catch (error) {
+            console.error('Error sending email:', error);
+            alert('Error al enviar el correo. Verifica la configuración de email en Empresa.');
+          }
+        }}
       />
     </div>
   );

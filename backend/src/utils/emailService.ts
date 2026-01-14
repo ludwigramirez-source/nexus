@@ -1,0 +1,127 @@
+import * as nodemailer from 'nodemailer';
+import { SystemConfigService } from '../modules/system-config/system-config.service';
+
+export interface EmailOptions {
+  to: string;
+  cc?: string;
+  bcc?: string;
+  subject: string;
+  html: string;
+  text?: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer | string;
+    contentType?: string;
+  }>;
+}
+
+export class EmailService {
+  private static async getTransporter() {
+    const companyConfig = await SystemConfigService.getCompanyConfig();
+
+    if (!companyConfig?.emailHost || !companyConfig?.emailUser || !companyConfig?.emailPassword) {
+      throw new Error('Configuración de correo incompleta. Configure el servidor SMTP en Empresa.');
+    }
+
+    return nodemailer.createTransport({
+      host: companyConfig.emailHost,
+      port: companyConfig.emailPort || 587,
+      secure: companyConfig.emailSecure || false, // true for 465, false for other ports
+      auth: {
+        user: companyConfig.emailUser,
+        pass: companyConfig.emailPassword,
+      },
+    });
+  }
+
+  static async sendEmail(options: EmailOptions): Promise<void> {
+    try {
+      const transporter = await this.getTransporter();
+      const companyConfig = await SystemConfigService.getCompanyConfig();
+
+      // Format sender with name: "Company Name <email@domain.com>"
+      const senderEmail = companyConfig?.emailFrom || companyConfig?.emailUser;
+      const senderName = companyConfig?.companyName || 'IPTEGRA SAS';
+      const fromField = `${senderName} <${senderEmail}>`;
+
+      const mailOptions = {
+        from: fromField,
+        to: options.to,
+        cc: options.cc || undefined,
+        bcc: options.bcc || undefined,
+        subject: options.subject,
+        text: options.text || options.html.replace(/<[^>]*>/g, ''), // Fallback to plain text
+        html: options.html,
+        attachments: options.attachments || [],
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log('Email sent successfully:', info.messageId);
+    } catch (error) {
+      console.error('Error sending email:', error);
+      throw new Error(`Error al enviar correo: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  static async testConnection(): Promise<{ success: boolean; message: string }> {
+    try {
+      const transporter = await this.getTransporter();
+      await transporter.verify();
+      return {
+        success: true,
+        message: 'Conexión SMTP exitosa. La configuración es correcta.'
+      };
+    } catch (error) {
+      console.error('Error testing SMTP connection:', error);
+      return {
+        success: false,
+        message: `Error en la conexión SMTP: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
+  }
+
+  static async sendTestEmail(to: string): Promise<void> {
+    try {
+      const companyConfig = await SystemConfigService.getCompanyConfig();
+      const companyName = companyConfig?.companyName || 'IPTEGRA SAS';
+
+      await this.sendEmail({
+        to,
+        subject: 'Correo de Prueba - Nexus IPTEGRA',
+        html: `
+          <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background-color: #2980b9; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+                <h1 style="margin: 0;">✅ Prueba de Correo Exitosa</h1>
+              </div>
+              <div style="background-color: #f9f9f9; padding: 30px; border: 1px solid #ddd; border-radius: 0 0 8px 8px;">
+                <p style="font-size: 16px; margin-bottom: 20px;">
+                  <strong>¡Felicitaciones!</strong> La configuración de correo electrónico de <strong>${companyName}</strong> está funcionando correctamente.
+                </p>
+                <div style="background-color: white; border-left: 4px solid #27ae60; padding: 15px; margin: 20px 0;">
+                  <p style="margin: 0; font-size: 14px;">
+                    <strong>✓ Servidor SMTP:</strong> Conectado<br>
+                    <strong>✓ Autenticación:</strong> Exitosa<br>
+                    <strong>✓ Envío de correos:</strong> Operativo
+                  </p>
+                </div>
+                <p style="font-size: 14px; color: #666; margin-top: 20px;">
+                  Ya puedes utilizar el sistema para enviar cotizaciones y notificaciones a tus clientes.
+                </p>
+                <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                <p style="color: #999; font-size: 12px; text-align: center; margin: 0;">
+                  Este es un correo de prueba generado desde <strong>Nexus - ${companyName}</strong><br>
+                  ${new Date().toLocaleString('es-CO', { dateStyle: 'full', timeStyle: 'short' })}
+                </p>
+              </div>
+            </body>
+          </html>
+        `,
+        text: `¡Felicitaciones! La configuración de correo electrónico de ${companyName} está funcionando correctamente.\n\nServidor SMTP: Conectado\nAutenticación: Exitosa\nEnvío de correos: Operativo\n\nYa puedes utilizar el sistema para enviar cotizaciones y notificaciones a tus clientes.`
+      });
+    } catch (error) {
+      console.error('Error sending test email:', error);
+      throw error;
+    }
+  }
+}

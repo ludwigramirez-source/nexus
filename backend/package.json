@@ -15,7 +15,13 @@
     "db:reset": "prisma migrate reset --force",
     "test": "jest"
   },
-  "keywords": ["api", "rest", "typescript", "prisma", "postgresql"],
+  "keywords": [
+    "api",
+    "rest",
+    "typescript",
+    "prisma",
+    "postgresql"
+  ],
   "author": "IPTEGRA",
   "license": "MIT",
   "dependencies": {
@@ -29,7 +35,7 @@
     "express-rate-limit": "^7.2.0",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^6.9.12",
+    "nodemailer": "^6.10.1",
     "openai": "^4.28.4",
     "socket.io": "^4.7.4",
     "winston": "^3.12.0",

@@ -22,6 +22,7 @@ const NavigationTree = ({ activeSection, onSectionChange }) => {
         { id: 'general', label: 'General', icon: 'Sliders' },
         { id: 'products', label: 'Productos', icon: 'Package' },
         { id: 'clients', label: 'Clientes', icon: 'Briefcase' },
+        { id: 'company', label: 'Empresa', icon: 'Building2' },
         { id: 'okrs', label: 'OKRs', icon: 'Target' },
         { id: 'integrations', label: 'Integraciones', icon: 'Plug' }
       ]

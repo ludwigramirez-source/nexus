@@ -13,17 +13,17 @@ export interface AuthRequest extends Request {
 export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return errorResponse(res, 'No token provided', 401);
     }
 
     const token = authHeader.substring(7);
     const payload = verifyAccessToken(token);
-    
+
     req.user = payload;
     next();
-  } catch (error) {
+  } catch (error: any) {
     return errorResponse(res, 'Invalid or expired token', 401);
   }
 };
