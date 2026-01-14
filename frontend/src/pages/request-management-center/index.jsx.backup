@@ -1,0 +1,656 @@
+import React, { useState, useEffect } from 'react';
+import { requestService } from '../../services/requestService';
+import socketService from '../../services/socketService';
+import Sidebar from '../../components/ui/Sidebar';
+import UserProfileHeader from '../../components/ui/UserProfileHeader';
+import NotificationCenter from '../../components/ui/NotificationCenter';
+import Breadcrumb from '../../components/ui/Breadcrumb';
+import Icon from '../../components/AppIcon';
+import Button from '../../components/ui/Button';
+import FilterSidebar from './components/FilterSidebar';
+import RequestTable from './components/RequestTable';
+import KanbanBoard from './components/KanbanBoard';
+import BulkActionsToolbar from './components/BulkActionsToolbar';
+import SearchBar from './components/SearchBar';
+import RequestCreationModal from './components/RequestCreationModal';
+import RequestDetailModal from './components/RequestDetailModal';
+
+const RequestManagementCenter = () => {
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(true);
+  const [viewMode, setViewMode] = useState('table');
+  const [selectedRequests, setSelectedRequests] = useState([]);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [filters, setFilters] = useState({
+    type: [],
+    status: [],
+    priority: [],
+    assignee: [],
+    client: []
+  });
+
+  const [requests, setRequests] = useState([
+  {
+    id: 2847,
+    title: "Implementar dashboard de analíticas en tiempo real",
+    description: "Cliente requiere visualización de métricas de negocio con actualización automática cada 30 segundos",
+    type: "customization",
+    priority: "high",
+    status: "in_progress",
+    assignee: {
+      name: "Ana García",
+      avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_18d0c753c-1763295606875.png",
+      avatarAlt: "Professional headshot of Hispanic woman with long dark hair wearing blue blazer"
+    },
+    estimatedHours: 40,
+    actualHours: 28,
+    client: "TechMex Solutions",
+    lastUpdate: "2026-01-06T18:30:00"
+  },
+  {
+    id: 2846,
+    title: "Optimizar consultas de base de datos para reportes",
+    description: "Mejorar rendimiento de queries complejas que generan timeouts en producción",
+    type: "product_feature",
+    priority: "critical",
+    status: "in_progress",
+    assignee: {
+      name: "Mario López",
+      avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_143b978a3-1763294952544.png",
+      avatarAlt: "Professional headshot of Hispanic man with short black hair in navy suit"
+    },
+    estimatedHours: 24,
+    actualHours: 18,
+    client: "Interno",
+    lastUpdate: "2026-01-07T01:15:00"
+  },
+  {
+    id: 2845,
+    title: "Corregir error en módulo de facturación",
+    description: "Bug crítico que impide generar facturas con descuentos aplicados correctamente",
+    type: "bug",
+    priority: "critical",
+    status: "review",
+    assignee: {
+      name: "Laura Martínez",
+      avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_18c8d7365-1763294879253.png",
+      avatarAlt: "Professional headshot of Hispanic woman with shoulder-length brown hair wearing white blouse"
+    },
+    estimatedHours: 8,
+    actualHours: 6,
+    client: "DataFlow Systems",
+    lastUpdate: "2026-01-06T22:45:00"
+  },
+  {
+    id: 2844,
+    title: "Integración con API de pagos Stripe",
+    description: "Implementar procesamiento de pagos recurrentes para suscripciones mensuales",
+    type: "product_feature",
+    priority: "high",
+    status: "in_progress",
+    assignee: {
+      name: "Ana García",
+      avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_18d0c753c-1763295606875.png",
+      avatarAlt: "Professional headshot of Hispanic woman with long dark hair wearing blue blazer"
+    },
+    estimatedHours: 32,
+    actualHours: 20,
+    client: "Interno",
+    lastUpdate: "2026-01-06T16:20:00"
+  },
+  {
+    id: 2843,
+    title: "Personalizar flujo de aprobaciones multinivel",
+    description: "Cliente necesita workflow de aprobación con 4 niveles jerárquicos y notificaciones automáticas",
+    type: "customization",
+    priority: "medium",
+    status: "pending",
+    assignee: null,
+    estimatedHours: 48,
+    actualHours: 0,
+    client: "InnovaTech",
+    lastUpdate: "2026-01-06T14:00:00"
+  },
+  {
+    id: 2842,
+    title: "Migrar infraestructura a Kubernetes",
+    description: "Containerizar aplicación y configurar orquestación para escalabilidad automática",
+    type: "infrastructure",
+    priority: "medium",
+    status: "in_progress",
+    assignee: {
+      name: "Carlos Rodríguez",
+      avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_145ad4bba-1763294926258.png",
+      avatarAlt: "Professional headshot of Hispanic man with glasses and short dark hair in gray suit"
+    },
+    estimatedHours: 80,
+    actualHours: 45,
+    client: "Interno",
+    lastUpdate: "2026-01-06T12:30:00"
+  },
+  {
+    id: 2841,
+    title: "Soporte técnico - Configuración de permisos",
+    description: "Cliente reporta problemas con asignación de roles y permisos en módulo de administración",
+    type: "support",
+    priority: "low",
+    status: "completed",
+    assignee: {
+      name: "Mario López",
+      avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_143b978a3-1763294952544.png",
+      avatarAlt: "Professional headshot of Hispanic man with short black hair in navy suit"
+    },
+    estimatedHours: 4,
+    actualHours: 3,
+    client: "CloudPro México",
+    lastUpdate: "2026-01-05T18:00:00"
+  },
+  {
+    id: 2840,
+    title: "Desarrollar módulo de reportes personalizados",
+    description: "Permitir a usuarios crear reportes dinámicos con filtros y agrupaciones configurables",
+    type: "product_feature",
+    priority: "high",
+    status: "in_progress",
+    assignee: {
+      name: "Laura Martínez",
+      avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_18c8d7365-1763294879253.png",
+      avatarAlt: "Professional headshot of Hispanic woman with shoulder-length brown hair wearing white blouse"
+    },
+    estimatedHours: 56,
+    actualHours: 32,
+    client: "Interno",
+    lastUpdate: "2026-01-06T20:15:00"
+  },
+  {
+    id: 2839,
+    title: "Implementar autenticación de dos factores",
+    description: "Cliente requiere 2FA obligatorio para todos los usuarios con soporte para apps autenticadoras",
+    type: "customization",
+    priority: "high",
+    status: "review",
+    assignee: {
+      name: "Ana García",
+      avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_18d0c753c-1763295606875.png",
+      avatarAlt: "Professional headshot of Hispanic woman with long dark hair wearing blue blazer"
+    },
+    estimatedHours: 24,
+    actualHours: 22,
+    client: "TechMex Solutions",
+    lastUpdate: "2026-01-06T19:45:00"
+  },
+  {
+    id: 2838,
+    title: "Corregir inconsistencias en sincronización de datos",
+    description: "Bug intermitente que causa pérdida de datos durante sincronización entre módulos",
+    type: "bug",
+    priority: "high",
+    status: "pending",
+    assignee: null,
+    estimatedHours: 16,
+    actualHours: 0,
+    client: "DataFlow Systems",
+    lastUpdate: "2026-01-06T11:00:00"
+  },
+  {
+    id: 2837,
+    title: "Optimizar carga de imágenes en galería",
+    description: "Implementar lazy loading y compresión automática para mejorar performance",
+    type: "product_feature",
+    priority: "medium",
+    status: "in_progress",
+    assignee: {
+      name: "Laura Martínez",
+      avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_18c8d7365-1763294879253.png",
+      avatarAlt: "Professional headshot of Hispanic woman with shoulder-length brown hair wearing white blouse"
+    },
+    estimatedHours: 20,
+    actualHours: 12,
+    client: "Interno",
+    lastUpdate: "2026-01-06T15:30:00"
+  },
+  {
+    id: 2836,
+    title: "Personalizar tema visual corporativo",
+    description: "Adaptar colores, logos y tipografía según guía de marca del cliente",
+    type: "customization",
+    priority: "low",
+    status: "pending",
+    assignee: null,
+    estimatedHours: 12,
+    actualHours: 0,
+    client: "InnovaTech",
+    lastUpdate: "2026-01-05T16:00:00"
+  },
+  {
+    id: 2835,
+    title: "Configurar backups automáticos diarios",
+    description: "Implementar sistema de respaldo incremental con retención de 30 días",
+    type: "infrastructure",
+    priority: "medium",
+    status: "completed",
+    assignee: {
+      name: "Carlos Rodríguez",
+      avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_145ad4bba-1763294926258.png",
+      avatarAlt: "Professional headshot of Hispanic man with glasses and short dark hair in gray suit"
+    },
+    estimatedHours: 16,
+    actualHours: 14,
+    client: "Interno",
+    lastUpdate: "2026-01-05T14:00:00"
+  },
+  {
+    id: 2834,
+    title: "Soporte - Capacitación de usuarios finales",
+    description: "Sesión de entrenamiento remoto para equipo de 15 usuarios sobre nuevas funcionalidades",
+    type: "support",
+    priority: "low",
+    status: "completed",
+    assignee: {
+      name: "Mario López",
+      avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_143b978a3-1763294952544.png",
+      avatarAlt: "Professional headshot of Hispanic man with short black hair in navy suit"
+    },
+    estimatedHours: 8,
+    actualHours: 8,
+    client: "CloudPro México",
+    lastUpdate: "2026-01-05T10:00:00"
+  },
+  {
+    id: 2833,
+    title: "Desarrollar API REST para integraciones",
+    description: "Crear endpoints documentados para permitir integraciones con sistemas externos",
+    type: "product_feature",
+    priority: "high",
+    status: "in_progress",
+    assignee: {
+      name: "Mario López",
+      avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_143b978a3-1763294952544.png",
+      avatarAlt: "Professional headshot of Hispanic man with short black hair in navy suit"
+    },
+    estimatedHours: 64,
+    actualHours: 38,
+    client: "Interno",
+    lastUpdate: "2026-01-06T17:00:00"
+  },
+  {
+    id: 2832,
+    title: "Implementar exportación masiva de datos",
+    description: "Cliente necesita exportar grandes volúmenes de datos en formatos Excel y CSV",
+    type: "customization",
+    priority: "medium",
+    status: "review",
+    assignee: {
+      name: "Ana García",
+      avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_18d0c753c-1763295606875.png",
+      avatarAlt: "Professional headshot of Hispanic woman with long dark hair wearing blue blazer"
+    },
+    estimatedHours: 28,
+    actualHours: 26,
+    client: "TechMex Solutions",
+    lastUpdate: "2026-01-06T13:20:00"
+  },
+  {
+    id: 2831,
+    title: "Corregir error en cálculo de impuestos",
+    description: "Bug que aplica incorrectamente tasas de IVA en facturas internacionales",
+    type: "bug",
+    priority: "high",
+    status: "in_progress",
+    assignee: {
+      name: "Laura Martínez",
+      avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_18c8d7365-1763294879253.png",
+      avatarAlt: "Professional headshot of Hispanic woman with shoulder-length brown hair wearing white blouse"
+    },
+    estimatedHours: 12,
+    actualHours: 8,
+    client: "DataFlow Systems",
+    lastUpdate: "2026-01-06T21:00:00"
+  },
+  {
+    id: 2830,
+    title: "Implementar búsqueda avanzada con filtros",
+    description: "Agregar capacidad de búsqueda con múltiples criterios y operadores lógicos",
+    type: "product_feature",
+    priority: "medium",
+    status: "pending",
+    assignee: null,
+    estimatedHours: 36,
+    actualHours: 0,
+    client: "Interno",
+    lastUpdate: "2026-01-05T12:00:00"
+  },
+  {
+    id: 2829,
+    title: "Personalizar notificaciones por email",
+    description: "Cliente requiere plantillas de email personalizadas con su branding corporativo",
+    type: "customization",
+    priority: "low",
+    status: "pending",
+    assignee: null,
+    estimatedHours: 16,
+    actualHours: 0,
+    client: "InnovaTech",
+    lastUpdate: "2026-01-05T09:00:00"
+  },
+  {
+    id: 2828,
+    title: "Actualizar certificados SSL",
+    description: "Renovar certificados de seguridad antes de su vencimiento el 15 de enero",
+    type: "infrastructure",
+    priority: "high",
+    status: "pending",
+    assignee: {
+      name: "Carlos Rodríguez",
+      avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_145ad4bba-1763294926258.png",
+      avatarAlt: "Professional headshot of Hispanic man with glasses and short dark hair in gray suit"
+    },
+    estimatedHours: 4,
+    actualHours: 0,
+    client: "Interno",
+    lastUpdate: "2026-01-06T10:00:00"
+  }]);
+
+  const teamMembers = [
+    { 
+      id: 'ana', 
+      name: 'Ana García',
+      avatar: 'https://img.rocket.new/generatedImages/rocket_gen_img_18d0c753c-1763295606875.png',
+      avatarAlt: 'Professional headshot of Hispanic woman with long dark hair wearing blue blazer'
+    },
+    { 
+      id: 'mario', 
+      name: 'Mario López',
+      avatar: 'https://img.rocket.new/generatedImages/rocket_gen_img_143b978a3-1763294952544.png',
+      avatarAlt: 'Professional headshot of Hispanic man with short black hair in navy suit'
+    },
+    { 
+      id: 'laura', 
+      name: 'Laura Martínez',
+      avatar: 'https://img.rocket.new/generatedImages/rocket_gen_img_18c8d7365-1763294879253.png',
+      avatarAlt: 'Professional headshot of Hispanic woman with shoulder-length brown hair wearing white blouse'
+    },
+    { 
+      id: 'carlos', 
+      name: 'Carlos Rodríguez',
+      avatar: 'https://img.rocket.new/generatedImages/rocket_gen_img_145ad4bba-1763294926258.png',
+      avatarAlt: 'Professional headshot of Hispanic man with glasses and short dark hair in gray suit'
+    }
+  ];
+
+  const currentUser = {
+    id: 'current-user',
+    name: 'Usuario Actual',
+    email: 'usuario@example.com'
+  };
+
+  const handleToggleSidebar = () => {
+    setIsSidebarCollapsed(!isSidebarCollapsed);
+  };
+
+  const handleToggleFilterSidebar = () => {
+    setIsFilterSidebarOpen(!isFilterSidebarOpen);
+  };
+
+  const handleFilterChange = (key, values) => {
+    setFilters({ ...filters, [key]: values });
+  };
+
+  const handleClearFilters = () => {
+    setFilters({
+      type: [],
+      status: [],
+      priority: [],
+      assignee: [],
+      client: []
+    });
+  };
+
+  const handleRequestSelect = (ids) => {
+    setSelectedRequests(ids);
+  };
+
+  const handleBulkAction = (action, value) => {
+    if (action === 'assign' && value) {
+      // Asignar miembro a todas las solicitudes seleccionadas
+      setRequests(prevRequests =>
+        prevRequests?.map(request =>
+          selectedRequests?.includes(request?.id)
+            ? { 
+                ...request, 
+                assignee: teamMembers?.find(m => m?.id === value),
+                lastUpdate: new Date()?.toISOString() 
+              }
+            : request
+        )
+      );
+      setSelectedRequests([]);
+      console.log(`Asignadas ${selectedRequests?.length} solicitudes a miembro:`, value);
+    } else if (action === 'status' && value) {
+      // Cambiar estado de todas las solicitudes seleccionadas
+      setRequests(prevRequests =>
+        prevRequests?.map(request =>
+          selectedRequests?.includes(request?.id)
+            ? { ...request, status: value, lastUpdate: new Date()?.toISOString() }
+            : request
+        )
+      );
+      setSelectedRequests([]);
+    } else if (action === 'priority' && value) {
+      // Cambiar prioridad de todas las solicitudes seleccionadas
+      setRequests(prevRequests =>
+        prevRequests?.map(request =>
+          selectedRequests?.includes(request?.id)
+            ? { ...request, priority: value, lastUpdate: new Date()?.toISOString() }
+            : request
+        )
+      );
+      setSelectedRequests([]);
+    } else {
+      console.log('Bulk action:', action, 'on requests:', selectedRequests);
+    }
+  };
+
+  const handleInlineEdit = (requestId, field, value) => {
+    console.log('Inline edit:', requestId, field, value);
+  };
+
+  const handleSearch = (searchTerm) => {
+    console.log('Search:', searchTerm);
+  };
+
+  const handleDateRangeChange = (dateRange) => {
+    console.log('Date range:', dateRange);
+  };
+
+  const handleSavedFilterSelect = (filterId) => {
+    console.log('Saved filter:', filterId);
+  };
+
+  const handleRequestMove = (requestId, newStatus) => {
+    setRequests(prevRequests => 
+      prevRequests?.map(request => 
+        request?.id === requestId 
+          ? { ...request, status: newStatus, lastUpdate: new Date()?.toISOString() }
+          : request
+      )
+    );
+  };
+
+  const handleCreateRequest = (requestData) => {
+    console.log('Creating request:', requestData);
+    setIsRequestModalOpen(false);
+  };
+
+  const handleRequestClick = (requestId) => {
+    const request = requests?.find(r => r?.id === requestId);
+    if (request) {
+      setSelectedRequest(request);
+      setIsDetailModalOpen(true);
+    }
+  };
+
+  const filteredRequests = requests?.filter(request => {
+    const matchesType = filters?.type?.length === 0 || filters?.type?.includes(request?.type);
+    const matchesStatus = filters?.status?.length === 0 || filters?.status?.includes(request?.status);
+    const matchesPriority = filters?.priority?.length === 0 || filters?.priority?.includes(request?.priority);
+    const matchesAssignee = filters?.assignee?.length === 0 || filters?.assignee?.includes(request?.assignee?.name || '');
+    const matchesClient = filters?.client?.length === 0 || filters?.client?.includes(request?.client);
+    
+    return matchesType && matchesStatus && matchesPriority && matchesAssignee && matchesClient;
+  });
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Sidebar isCollapsed={isSidebarCollapsed} onToggleCollapse={handleToggleSidebar} />
+      <div className={`transition-smooth ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-60'}`}>
+        <header className="sticky top-0 z-40 bg-card border-b border-border shadow-elevation-1">
+          <div className="flex items-center justify-between h-20 px-4 md:px-6 lg:px-8">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-xl md:text-2xl lg:text-3xl font-heading font-semibold text-foreground">
+                Centro de Gestión de Solicitudes
+              </h1>
+            </div>
+
+            <div className="flex items-center space-x-3 md:space-x-4">
+              <NotificationCenter 
+                onMarkAsRead={() => {}} 
+                onMarkAllAsRead={() => {}} 
+                onClearAll={() => {}} 
+              />
+              <UserProfileHeader 
+                user={{ name: 'Usuario', email: 'usuario@example.com' }} 
+                onLogout={() => {}} 
+              />
+            </div>
+          </div>
+        </header>
+
+        <main className="p-4 md:p-6 lg:p-8">
+          <Breadcrumb customItems={[]} />
+
+          <div className="mb-4 md:mb-5 lg:mb-6">
+            <SearchBar
+              onSearch={handleSearch}
+              onDateRangeChange={handleDateRangeChange}
+              onSavedFilterSelect={handleSavedFilterSelect}
+            />
+          </div>
+
+          <div className="flex items-center justify-between mb-4 md:mb-5 lg:mb-6">
+            <div className="flex items-center space-x-2 md:space-x-3">
+              <Button
+                variant={isFilterSidebarOpen ? 'default' : 'outline'}
+                iconName="Filter"
+                iconPosition="left"
+                onClick={handleToggleFilterSidebar}
+              >
+                Filtros
+              </Button>
+              <Button variant="outline" iconName="Download" iconPosition="left">
+                Exportar
+              </Button>
+              <Button 
+                variant="default" 
+                iconName="Plus" 
+                iconPosition="left"
+                onClick={() => setIsRequestModalOpen(true)}
+              >
+                Nueva Solicitud
+              </Button>
+            </div>
+
+            <div className="flex items-center space-x-2 bg-muted rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('table')}
+                className={`px-3 py-1.5 rounded-md text-sm font-caption font-medium transition-smooth ${
+                  viewMode === 'table' ? 'bg-card text-foreground shadow-elevation-1' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon name="Table" size={18} className="inline mr-2" />
+                Tabla
+              </button>
+              <button
+                onClick={() => setViewMode('kanban')}
+                className={`px-3 py-1.5 rounded-md text-sm font-caption font-medium transition-smooth ${
+                  viewMode === 'kanban' ? 'bg-card text-foreground shadow-elevation-1' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon name="LayoutGrid" size={18} className="inline mr-2" />
+                Kanban
+              </button>
+            </div>
+          </div>
+
+          <div className="flex gap-4 md:gap-5 lg:gap-6">
+            {isFilterSidebarOpen && (
+              <div className="w-full lg:w-1/4 hidden lg:block">
+                <div className="sticky top-24 h-[calc(100vh-8rem)] overflow-hidden rounded-lg border border-border shadow-elevation-2">
+                  <FilterSidebar
+                    filters={filters}
+                    onFilterChange={handleFilterChange}
+                    onClearFilters={handleClearFilters}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className={`flex-1 ${isFilterSidebarOpen ? 'lg:w-3/4' : 'w-full'}`}>
+              <div className="bg-card rounded-lg border border-border shadow-elevation-2 overflow-hidden">
+                {viewMode === 'table' ? (
+                  <div className="overflow-x-auto">
+                    <RequestTable
+                      requests={filteredRequests}
+                      onRequestSelect={handleRequestSelect}
+                      selectedRequests={selectedRequests}
+                      onBulkAction={handleBulkAction}
+                      onInlineEdit={handleInlineEdit}
+                      onRequestClick={handleRequestClick}
+                    />
+                  </div>
+                ) : (
+                  <div className="p-4 md:p-5 lg:p-6 h-[calc(100vh-20rem)] overflow-y-auto">
+                    <KanbanBoard 
+                      requests={filteredRequests} 
+                      onRequestMove={handleRequestMove}
+                      onRequestClick={handleRequestClick}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <BulkActionsToolbar
+            selectedCount={selectedRequests?.length}
+            onBulkAction={handleBulkAction}
+            onClearSelection={() => setSelectedRequests([])}
+            teamMembers={teamMembers}
+          />
+        </main>
+      </div>
+
+      <RequestCreationModal
+        isOpen={isRequestModalOpen}
+        onClose={() => setIsRequestModalOpen(false)}
+        onSave={handleCreateRequest}
+      />
+
+      {isDetailModalOpen && selectedRequest && (
+        <RequestDetailModal
+          request={selectedRequest}
+          onClose={() => {
+            setIsDetailModalOpen(false);
+            setSelectedRequest(null);
+          }}
+          teamMembers={teamMembers}
+          currentUser={currentUser}
+        />
+      )}
+    </div>
+  );
+};
+
+export default RequestManagementCenter;

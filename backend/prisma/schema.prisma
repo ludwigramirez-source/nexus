@@ -1,0 +1,477 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USERS & AUTHENTICATION
+// ============================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   // Dynamic role from system_config
+  avatar    String?
+  capacity  Int      @default(40) // hours per week
+  skills    String[]
+  status    UserStatus @default(ACTIVE)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  assignedRequests Request[]         @relation("AssignedUsers")
+  activities       RequestActivity[]
+  comments         Comment[]
+  assignments      Assignment[]
+  ownedOKRs        OKR[]
+  sessions         Session[]
+  activityLogs     ActivityLog[]
+
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  refreshToken String   @unique @map("refresh_token")
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// Role enum removed - now using dynamic roles from system_config
+// Old enum kept as comment for reference:
+// enum Role {
+//   CEO
+//   DEV_DIRECTOR
+//   BACKEND
+//   FRONTEND
+//   FULLSTACK
+//   SOPORTE_VOIP
+// }
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// ============================================
+// REQUESTS
+// ============================================
+
+model Request {
+  id              String        @id @default(cuid())
+  title           String
+  description     String        @db.Text
+  type            RequestType
+  priority        Priority
+  status          RequestStatus @default(INTAKE)
+  requestedBy     String        @map("requested_by")
+  requestedAt     DateTime      @default(now()) @map("requested_at")
+  estimatedHours  Float         @map("estimated_hours")
+  actualHours     Float?        @map("actual_hours")
+  productId       String?       @map("product_id")
+  clientId        String?       @map("client_id")
+  dueDate         DateTime?     @map("due_date")
+  completedAt     DateTime?     @map("completed_at")
+  tags            String[]
+  notes           String?       @db.Text
+  customToFeature Boolean       @default(false) @map("custom_to_feature")
+  repetitionCount Int           @default(0) @map("repetition_count")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  product       Product?          @relation(fields: [productId], references: [id])
+  client        Client?           @relation(fields: [clientId], references: [id])
+  assignedUsers User[]            @relation("AssignedUsers")
+  activities    RequestActivity[]
+  comments      Comment[]
+  assignments   Assignment[]
+  roadmapLinks  RoadmapRequest[]
+
+  @@index([status])
+  @@index([type])
+  @@index([productId])
+  @@index([clientId])
+  @@map("requests")
+}
+
+enum RequestType {
+  PRODUCT_FEATURE
+  CUSTOMIZATION
+  BUG
+  SUPPORT
+  INFRASTRUCTURE
+}
+
+enum Priority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum RequestPriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum RequestStatus {
+  INTAKE
+  BACKLOG
+  IN_PROGRESS
+  REVIEW
+  DONE
+  REJECTED
+}
+
+enum ProductType {
+  MAWI
+  OMNILEADS
+  NEW_PRODUCT_1
+  NEW_PRODUCT_2
+  NEW_PRODUCT_3
+  INTERNAL
+}
+
+enum ProductName {
+  MAWI
+  OMNILEADS
+  NEW_PRODUCT_1
+  NEW_PRODUCT_2
+  NEW_PRODUCT_3
+  INTERNAL
+}
+
+// ============================================
+// REQUEST ACTIVITIES & COMMENTS
+// ============================================
+
+model RequestActivity {
+  id           String   @id @default(cuid())
+  requestId    String   @map("request_id")
+  userId       String   @map("user_id")
+  activityType String   @map("activity_type")
+  description  String
+  metadata     Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([requestId])
+  @@map("request_activities")
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  requestId String   @map("request_id")
+  userId    String   @map("user_id")
+  content   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([requestId])
+  @@map("comments")
+}
+
+// ============================================
+// ASSIGNMENTS (Capacity Planning)
+// ============================================
+
+model Assignment {
+  id             String           @id @default(cuid())
+  userId         String           @map("user_id")
+  requestId      String           @map("request_id")
+  weekStart      DateTime         @map("week_start")
+  allocatedHours Float            @map("allocated_hours")
+  actualHours    Float            @default(0) @map("actual_hours")
+  status         AssignmentStatus @default(PLANNED)
+  notes          String?          @db.Text
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id])
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, requestId, weekStart])
+  @@index([userId])
+  @@index([weekStart])
+  @@map("assignments")
+}
+
+enum AssignmentStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+}
+
+// ============================================
+// OKRs
+// ============================================
+
+model OKR {
+  id          String    @id @default(cuid())
+  title       String
+  description String?   @db.Text
+  quarter     String
+  year        Int
+  ownerId     String    @map("owner_id")
+  status      OKRStatus @default(NOT_STARTED)
+  progress    Float     @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  owner      User        @relation(fields: [ownerId], references: [id])
+  keyResults KeyResult[]
+
+  @@index([quarter])
+  @@index([year])
+  @@map("okrs")
+}
+
+model KeyResult {
+  id           String   @id @default(cuid())
+  okrId        String   @map("okr_id")
+  title        String
+  targetValue  Float    @map("target_value")
+  currentValue Float    @default(0) @map("current_value")
+  unit         String
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  okr OKR @relation(fields: [okrId], references: [id], onDelete: Cascade)
+
+  @@index([okrId])
+  @@map("key_results")
+}
+
+enum OKRStatus {
+  NOT_STARTED
+  ON_TRACK
+  AT_RISK
+  BEHIND
+  COMPLETED
+}
+
+enum Quarter {
+  Q1
+  Q2
+  Q3
+  Q4
+}
+
+// ============================================
+// PRODUCTS & ROADMAP
+// ============================================
+
+model Product {
+  id            String              @id @default(cuid())
+  name          String              @unique
+  description   String?             @db.Text
+  type          ProductCategory     @default(PRODUCT)
+  price         Float               @default(0)
+  currency      String              @default("USD")
+  hasVAT        Boolean             @default(true) @map("has_vat")
+  vatRate       Float?              @map("vat_rate")
+  recurrence    BillingRecurrence?  @default(MONTHLY)
+  repositoryUrl String?             @map("repository_url")
+  productionUrl String?             @map("production_url")
+  stagingUrl    String?             @map("staging_url")
+  status        ProductStatus       @default(ACTIVE)
+  launchedAt    DateTime?           @map("launched_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  roadmapItems RoadmapItem[]
+  requests     Request[]
+
+  @@map("products")
+}
+
+enum ProductCategory {
+  PRODUCT
+  SERVICE
+}
+
+model RoadmapItem {
+  id          String        @id @default(cuid())
+  productId   String        @map("product_id")
+  title       String
+  description String?       @db.Text
+  quarter     String
+  status      RoadmapStatus @default(PLANNED)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  product      Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  requestLinks RoadmapRequest[]
+
+  @@index([productId])
+  @@index([quarter])
+  @@map("roadmap_items")
+}
+
+model RoadmapRequest {
+  roadmapItemId String @map("roadmap_item_id")
+  requestId     String @map("request_id")
+
+  roadmapItem RoadmapItem @relation(fields: [roadmapItemId], references: [id], onDelete: Cascade)
+  request     Request     @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@id([roadmapItemId, requestId])
+  @@map("roadmap_requests")
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum BillingRecurrence {
+  MONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  ANNUAL
+  ONE_TIME
+}
+
+enum RoadmapStatus {
+  PLANNED
+  IN_PROGRESS
+  DONE
+}
+
+enum RoadmapPriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+// ============================================
+// CLIENTS
+// ============================================
+
+model Client {
+  id            String       @id @default(cuid())
+  name          String       @unique
+  nit           String?
+  email         String?
+  contactPerson String?      @map("contact_person")
+  phone         String?
+  website       String?
+  address       String?
+  city          String?
+  notes         String?      @db.Text
+  products      String[]
+  mrr           Float        @default(0)
+  currency      String       @default("USD")
+  healthScore   Int          @default(100) @map("health_score")
+  tier          ClientTier   @default(BASIC)
+  status        ClientStatus @default(ACTIVE)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  requests Request[]
+
+  @@map("clients")
+}
+
+enum ClientTier {
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
+enum ClientStatus {
+  ACTIVE
+  CHURNED
+  AT_RISK
+}
+
+// ============================================
+// METRICS
+// ============================================
+
+model WeeklyMetric {
+  id                 String   @id @default(cuid())
+  weekStart          DateTime @unique @map("week_start")
+  totalRequests      Int      @default(0) @map("total_requests")
+  completedRequests  Int      @default(0) @map("completed_requests")
+  productRequests    Int      @default(0) @map("product_requests")
+  customRequests     Int      @default(0) @map("custom_requests")
+  totalHours         Float    @default(0) @map("total_hours")
+  productHours       Float    @default(0) @map("product_hours")
+  customHours        Float    @default(0) @map("custom_hours")
+  bugHours           Float    @default(0) @map("bug_hours")
+  supportHours       Float    @default(0) @map("support_hours")
+  productPercentage  Float    @default(0) @map("product_percentage")
+  customPercentage   Float    @default(0) @map("custom_percentage")
+  featuresShipped    Int      @default(0) @map("features_shipped")
+  customsCompleted   Int      @default(0) @map("customs_completed")
+  teamVelocity       Float    @default(0) @map("team_velocity")
+  teamUtilization    Float    @default(0) @map("team_utilization")
+  notes              String?  @db.Text
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@map("weekly_metrics")
+}
+
+// ============================================
+// SYSTEM CONFIGURATION
+// ============================================
+
+model SystemConfig {
+  id    String @id @default(cuid())
+  key   String @unique
+  value Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_config")
+}
+
+// ============================================
+// ACTIVITY LOGS
+// ============================================
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String?  @map("user_id")
+  userName    String   @map("user_name")
+  userEmail   String?  @map("user_email")
+  action      String   // CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.
+  entity      String   // USER, REQUEST, CLIENT, PRODUCT, etc.
+  entityId    String?  @map("entity_id")
+  description String   @db.Text
+  metadata    Json?    // Additional context data
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
