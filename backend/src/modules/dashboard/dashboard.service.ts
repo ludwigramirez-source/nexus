@@ -1,5 +1,6 @@
 import prisma from '../../config/database';
 import logger from '../../config/logger';
+import { getUSDtoCOPRate } from '../../utils/exchangeRateService';
 
 interface DashboardMetrics {
   totalProducts: number;
@@ -12,6 +13,12 @@ interface DashboardMetrics {
   totalMonthlyRevenue: number;
   totalClients: number;
   activeClients: number;
+  // Métricas por moneda
+  mrrUSD: number;
+  mrrCOP: number;
+  totalMRRConverted: number; // Total en USD usando TRM
+  exchangeRate: number; // TRM actual
+  exchangeRateLastUpdated: Date; // Fecha de última actualización de TRM
 }
 
 interface ProductWithClients {
@@ -53,14 +60,15 @@ export class DashboardService {
         where: { status: 'ACTIVE' },
       });
 
-      // Get all active clients with their products
-      const clients = await prisma.client.findMany({
-        where: { status: 'ACTIVE' },
-        select: {
-          id: true,
-          products: true,
-          mrr: true,
-          status: true,
+      // Get converted quotations (CONVERTED_TO_ORDER)
+      const convertedQuotations = await prisma.quotation.findMany({
+        where: { status: 'CONVERTED_TO_ORDER' },
+        include: {
+          quotationItems: {
+            include: {
+              product: true,
+            },
+          },
         },
       });
 
@@ -68,50 +76,68 @@ export class DashboardService {
       const totalProducts = products.filter(p => p.type === 'PRODUCT').length;
       const totalServices = products.filter(p => p.type === 'SERVICE').length;
 
-      // Create a map of product prices by ID
-      const productMap = new Map(products.map(p => [p.id, p]));
-
       let monthlyProductRevenue = 0;
       let monthlyServiceRevenue = 0;
       let recurringMRR = 0;
       let oneTimeMRR = 0;
       let totalVAT = 0;
+      let mrrUSD = 0;
+      let mrrCOP = 0;
 
-      // Calculate revenue from clients
-      clients.forEach(client => {
-        if (Array.isArray(client.products)) {
-          client.products.forEach(productId => {
-            const product = productMap.get(productId);
-            if (product) {
-              const price = product.price || 0;
-              const vatAmount = product.hasVAT && product.vatRate
-                ? price * (product.vatRate / 100)
-                : 0;
+      // Obtener TRM desde la API pública
+      const { rate: exchangeRate, lastUpdated: exchangeRateLastUpdated } = await getUSDtoCOPRate();
 
-              // Add to product or service revenue
-              if (product.type === 'PRODUCT') {
-                monthlyProductRevenue += price;
-              } else {
-                monthlyServiceRevenue += price;
-              }
+      // Calculate revenue from converted quotations
+      convertedQuotations.forEach(quotation => {
+        quotation.quotationItems.forEach(item => {
+          const price = item.unitPrice * item.quantity;
+          const discount = item.discount || 0;
+          const subtotal = price - discount;
+          const vatAmount = item.taxAmount || 0;
 
-              // Add to recurring or one-time MRR
-              if (product.recurrence === 'ONE_TIME') {
-                oneTimeMRR += price;
-              } else {
-                recurringMRR += price;
-              }
+          // Convertir a USD si la cotización es en COP
+          const subtotalUSD = quotation.currency === 'COP'
+            ? subtotal / exchangeRate
+            : subtotal;
+          const vatAmountUSD = quotation.currency === 'COP'
+            ? vatAmount / exchangeRate
+            : vatAmount;
 
-              // Add VAT
-              totalVAT += vatAmount;
-            }
-          });
-        }
+          // Add to product or service revenue by type (en USD)
+          if (item.product?.type === 'PRODUCT') {
+            monthlyProductRevenue += subtotalUSD;
+          } else if (item.product?.type === 'SERVICE') {
+            monthlyServiceRevenue += subtotalUSD;
+          }
+
+          // Add to recurring or one-time MRR based on recurrence (en USD)
+          if (item.recurrence === 'ONE_TIME') {
+            oneTimeMRR += subtotalUSD;
+          } else {
+            recurringMRR += subtotalUSD;
+          }
+
+          // Add VAT (en USD)
+          totalVAT += vatAmountUSD;
+
+          // Separate by currency (USD and COP - en su moneda original)
+          const itemTotal = subtotal + vatAmount;
+          if (quotation.currency === 'USD') {
+            mrrUSD += itemTotal;
+          } else if (quotation.currency === 'COP') {
+            mrrCOP += itemTotal;
+          }
+        });
       });
 
       const totalMonthlyRevenue = monthlyProductRevenue + monthlyServiceRevenue;
       const totalClients = await prisma.client.count();
-      const activeClients = clients.length;
+      const activeClients = await prisma.client.count({
+        where: { status: 'ACTIVE' },
+      });
+
+      // Calculate total MRR converted to USD using exchange rate
+      const totalMRRConverted = mrrUSD + (mrrCOP / exchangeRate);
 
       return {
         totalProducts,
@@ -124,6 +150,11 @@ export class DashboardService {
         totalMonthlyRevenue,
         totalClients,
         activeClients,
+        mrrUSD,
+        mrrCOP,
+        totalMRRConverted,
+        exchangeRate,
+        exchangeRateLastUpdated,
       };
     } catch (error) {
       logger.error('Error getting dashboard metrics:', error);

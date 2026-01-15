@@ -33,6 +33,7 @@ export interface CreateQuotationDTO {
 export interface UpdateQuotationDTO {
   validUntil?: Date | string;
   status?: QuotationStatus;
+  currency?: string;
   deliveryTime?: string;
   paymentTerms?: string;
   warranty?: string;

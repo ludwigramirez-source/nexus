@@ -21,6 +21,13 @@ router.post('/', quotationsController.create);
 router.get('/', quotationsController.getAll);
 
 /**
+ * GET /api/quotations/kanban
+ * Get quotations grouped by status for Kanban board (Sales Funnel)
+ * Query params: clientId, dateFrom, dateTo, minAmount, maxAmount, currency, search
+ */
+router.get('/kanban', quotationsController.getKanbanData);
+
+/**
  * GET /api/quotations/:id
  * Get quotation by ID
  */

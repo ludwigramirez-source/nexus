@@ -414,6 +414,7 @@ enum ClientStatus {
 enum QuotationStatus {
   DRAFT
   SENT
+  NEGOTIATING
   ACCEPTED
   REJECTED
   EXPIRED

@@ -10,6 +10,7 @@ const QuotationFilterToolbar = ({ onFilterChange, activeFilters, clients }) => {
     { value: 'all', label: 'Todos los estados' },
     { value: 'DRAFT', label: 'Borrador' },
     { value: 'SENT', label: 'Enviada' },
+    { value: 'NEGOTIATING', label: 'En Negociación' },
     { value: 'ACCEPTED', label: 'Aceptada' },
     { value: 'REJECTED', label: 'Rechazada' },
     { value: 'EXPIRED', label: 'Vencida' },

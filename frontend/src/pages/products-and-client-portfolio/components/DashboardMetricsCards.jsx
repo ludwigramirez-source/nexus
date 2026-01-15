@@ -40,89 +40,140 @@ const DashboardMetricsCards = ({ metrics }) => {
     );
   }
 
-  const formatCurrency = (amount) => {
+  const formatCurrency = (amount, currency = 'USD') => {
     return new Intl.NumberFormat('es-ES', {
       style: 'currency',
-      currency: 'USD',
+      currency: currency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
   };
 
   return (
-    <div className="mb-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-        {/* Total Products */}
-        <MetricCard
-          title="Total Productos"
-          value={metrics.totalProducts}
-          icon="Package"
-          color="primary"
-          subtitle="Productos activos"
-        />
+    <div className="mb-6 space-y-6">
+      {/* MRR por Moneda */}
+      <div>
+        <h3 className="text-lg font-heading font-semibold text-foreground mb-4">
+          MRR de Cotizaciones Convertidas
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5">
+          {/* MRR USD */}
+          <MetricCard
+            title="MRR USD (EEUU)"
+            value={formatCurrency(metrics.mrrUSD || 0, 'USD')}
+            icon="DollarSign"
+            color="success"
+            subtitle="Cotizaciones en dólares"
+          />
 
-        {/* Total Services */}
-        <MetricCard
-          title="Total Servicios"
-          value={metrics.totalServices}
-          icon="LayoutGrid"
-          color="secondary"
-          subtitle="Servicios activos"
-        />
+          {/* MRR COP */}
+          <MetricCard
+            title="MRR COP (Colombia)"
+            value={formatCurrency(metrics.mrrCOP || 0, 'COP')}
+            icon="DollarSign"
+            color="info"
+            subtitle="Cotizaciones en pesos"
+          />
 
-        {/* Product Revenue */}
-        <MetricCard
-          title="Facturación Productos"
-          value={formatCurrency(metrics.monthlyProductRevenue)}
-          icon="TrendingUp"
-          color="success"
-          subtitle="Mensual"
-        />
+          {/* Total MRR Convertido */}
+          <MetricCard
+            title="Total MRR Convertido"
+            value={formatCurrency(metrics.totalMRRConverted || 0, 'USD')}
+            icon="TrendingUp"
+            color="primary"
+            subtitle={`TRM: ${new Intl.NumberFormat('es-ES').format(metrics.exchangeRate || 0)} (Actualizado: ${
+              metrics.exchangeRateLastUpdated
+                ? new Date(metrics.exchangeRateLastUpdated).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+                : 'N/A'
+            })`}
+          />
+        </div>
+      </div>
 
-        {/* Service Revenue */}
-        <MetricCard
-          title="Facturación Servicios"
-          value={formatCurrency(metrics.monthlyServiceRevenue)}
-          icon="BarChart3"
-          color="info"
-          subtitle="Mensual"
-        />
+      {/* Métricas Generales */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-heading font-semibold text-foreground">
+            Métricas Generales
+          </h3>
+          <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-full">
+            <Icon name="DollarSign" size={14} className="text-primary" />
+            <span className="text-xs font-medium text-primary">Todos los valores en USD</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+          {/* Total Products */}
+          <MetricCard
+            title="Total Productos"
+            value={metrics.totalProducts}
+            icon="Package"
+            color="primary"
+            subtitle="Productos activos"
+          />
 
-        {/* Recurring MRR */}
-        <MetricCard
-          title="MRR Recurrente"
-          value={formatCurrency(metrics.recurringMRR)}
-          icon="RefreshCw"
-          color="primary"
-          subtitle="Ingresos recurrentes"
-        />
+          {/* Total Services */}
+          <MetricCard
+            title="Total Servicios"
+            value={metrics.totalServices}
+            icon="LayoutGrid"
+            color="secondary"
+            subtitle="Servicios activos"
+          />
 
-        {/* One-time MRR */}
-        <MetricCard
-          title="Pagos Únicos"
-          value={formatCurrency(metrics.oneTimeMRR)}
-          icon="DollarSign"
-          color="warning"
-          subtitle="Ingresos no recurrentes"
-        />
+          {/* Product Revenue */}
+          <MetricCard
+            title="Facturación Productos"
+            value={formatCurrency(metrics.monthlyProductRevenue, 'USD')}
+            icon="TrendingUp"
+            color="success"
+            subtitle="Convertido a USD"
+          />
 
-        {/* Total VAT */}
-        <MetricCard
-          title="IVA Total"
-          value={formatCurrency(metrics.totalVAT)}
-          icon="FileText"
-          color="muted"
-          subtitle="Impuestos"
-        />
+          {/* Service Revenue */}
+          <MetricCard
+            title="Facturación Servicios"
+            value={formatCurrency(metrics.monthlyServiceRevenue, 'USD')}
+            icon="BarChart3"
+            color="info"
+            subtitle="Convertido a USD"
+          />
 
-        {/* Total Monthly Revenue */}
-        <MetricCard
-          title="Total Mensual"
-          value={formatCurrency(metrics.totalMonthlyRevenue)}
-          icon="DollarSign"
-          color="success"
-          subtitle={`${metrics.activeClients} clientes activos`}
-        />
+          {/* Recurring MRR */}
+          <MetricCard
+            title="MRR Recurrente"
+            value={formatCurrency(metrics.recurringMRR, 'USD')}
+            icon="RefreshCw"
+            color="primary"
+            subtitle="Ingresos recurrentes (USD)"
+          />
+
+          {/* One-time MRR */}
+          <MetricCard
+            title="Pagos Únicos"
+            value={formatCurrency(metrics.oneTimeMRR, 'USD')}
+            icon="DollarSign"
+            color="warning"
+            subtitle="Ingresos no recurrentes (USD)"
+          />
+
+          {/* Total VAT */}
+          <MetricCard
+            title="IVA Total"
+            value={formatCurrency(metrics.totalVAT, 'USD')}
+            icon="FileText"
+            color="muted"
+            subtitle="Impuestos (USD)"
+          />
+
+          {/* Total Monthly Revenue */}
+          <MetricCard
+            title="Total Mensual"
+            value={formatCurrency(metrics.totalMonthlyRevenue, 'USD')}
+            icon="DollarSign"
+            color="success"
+            subtitle={`${metrics.activeClients} clientes activos`}
+          />
+        </div>
       </div>
     </div>
   );

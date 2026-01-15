@@ -353,6 +353,7 @@ export const quotationsService = {
     // Update quotation
     const updateData: Prisma.QuotationUpdateInput = {
       validUntil: data.validUntil ? new Date(data.validUntil) : undefined,
+      currency: data.currency,
       deliveryTime: data.deliveryTime,
       paymentTerms: data.paymentTerms,
       warranty: data.warranty,
@@ -736,5 +737,123 @@ export const quotationsService = {
         recipientEmail: emailData.to
       }
     });
+  },
+
+  /**
+   * Get quotations grouped by status for Kanban board (Sales Funnel)
+   * Excludes DRAFT status
+   */
+  async getKanbanData(filters?: {
+    clientId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    minAmount?: number;
+    maxAmount?: number;
+    currency?: string;
+    search?: string;
+  }): Promise<{
+    columns: Array<{
+      status: string;
+      label: string;
+      totalAmount: number;
+      count: number;
+      quotations: Array<QuotationResponse>;
+    }>;
+  }> {
+    // Build where clause
+    const where: any = {
+      status: {
+        not: 'DRAFT' // Exclude drafts from funnel
+      }
+    };
+
+    if (filters?.clientId) {
+      where.clientId = filters.clientId;
+    }
+
+    if (filters?.dateFrom || filters?.dateTo) {
+      where.createdAt = {};
+      if (filters.dateFrom) {
+        where.createdAt.gte = new Date(filters.dateFrom);
+      }
+      if (filters.dateTo) {
+        where.createdAt.lte = new Date(filters.dateTo);
+      }
+    }
+
+    if (filters?.minAmount !== undefined || filters?.maxAmount !== undefined) {
+      where.totalAmount = {};
+      if (filters.minAmount !== undefined) {
+        where.totalAmount.gte = filters.minAmount;
+      }
+      if (filters.maxAmount !== undefined) {
+        where.totalAmount.lte = filters.maxAmount;
+      }
+    }
+
+    if (filters?.currency) {
+      where.currency = filters.currency;
+    }
+
+    if (filters?.search) {
+      where.OR = [
+        { quotationNumber: { contains: filters.search, mode: 'insensitive' } },
+        { client: { name: { contains: filters.search, mode: 'insensitive' } } }
+      ];
+    }
+
+    // Get all quotations for the funnel
+    const quotations = await prisma.quotation.findMany({
+      where,
+      include: {
+        client: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            tier: true
+          }
+        },
+        createdByUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    // Define kanban columns in order
+    const columnDefinitions = [
+      { status: 'SENT', label: 'Enviadas' },
+      { status: 'NEGOTIATING', label: 'En Negociación' },
+      { status: 'ACCEPTED', label: 'Aceptadas' },
+      { status: 'CONVERTED_TO_ORDER', label: 'Convertidas' },
+      { status: 'REJECTED', label: 'Rechazadas' },
+      { status: 'EXPIRED', label: 'Expiradas' }
+    ];
+
+    // Group quotations by status
+    const columns = columnDefinitions.map(columnDef => {
+      const columnQuotations = quotations.filter(q => q.status === columnDef.status);
+      const totalAmount = columnQuotations.reduce((sum, q) => sum + Number(q.totalAmount), 0);
+
+      return {
+        status: columnDef.status,
+        label: columnDef.label,
+        totalAmount,
+        count: columnQuotations.length,
+        quotations: columnQuotations.map(q => ({
+          ...q,
+          clientName: q.client.name
+        })) as QuotationResponse[]
+      };
+    });
+
+    return { columns };
   }
 };

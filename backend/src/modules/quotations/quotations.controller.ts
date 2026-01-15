@@ -296,5 +296,34 @@ export const quotationsController = {
         details: error instanceof Error ? error.message : 'Unknown error'
       });
     }
+  },
+
+  /**
+   * Get kanban data (quotations grouped by status for sales funnel)
+   */
+  async getKanbanData(req: Request, res: Response): Promise<void> {
+    try {
+      const { clientId, dateFrom, dateTo, minAmount, maxAmount, currency, search } = req.query;
+
+      const filters: any = {};
+
+      if (clientId) filters.clientId = clientId as string;
+      if (dateFrom) filters.dateFrom = dateFrom as string;
+      if (dateTo) filters.dateTo = dateTo as string;
+      if (minAmount) filters.minAmount = parseFloat(minAmount as string);
+      if (maxAmount) filters.maxAmount = parseFloat(maxAmount as string);
+      if (currency) filters.currency = currency as string;
+      if (search) filters.search = search as string;
+
+      const kanbanData = await quotationsService.getKanbanData(filters);
+
+      res.json(kanbanData);
+    } catch (error) {
+      console.error('Error getting kanban data:', error);
+      res.status(500).json({
+        error: 'Error al obtener datos del kanban',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
   }
 };

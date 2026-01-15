@@ -2,7 +2,7 @@ import React from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
-const ProductTableRow = ({ product, onViewDetails, onToggleStatus }) => {
+const ProductTableRow = ({ product, onViewDetails, onToggleStatus, onDelete }) => {
   const handleStatusToggle = async () => {
     const newStatus = product?.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     await onToggleStatus(product?.id, newStatus);
@@ -82,13 +82,21 @@ const ProductTableRow = ({ product, onViewDetails, onToggleStatus }) => {
 
       {/* Acciones */}
       <td className="px-3 py-3 md:px-4 md:py-4">
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-center gap-1">
           <Button
             variant="ghost"
             size="sm"
             iconName="Edit"
             onClick={() => onViewDetails(product)}
             title="Editar producto"
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            iconName="Trash2"
+            onClick={() => onDelete(product?.id)}
+            title="Eliminar producto"
+            className="text-error hover:text-error hover:bg-error/10"
           />
         </div>
       </td>

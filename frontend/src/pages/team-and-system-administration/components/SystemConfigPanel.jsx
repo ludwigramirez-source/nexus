@@ -23,6 +23,8 @@ const SystemConfigPanel = ({ config, onSave }) => {
     { id: 'products', label: 'Productos', icon: 'Package' },
     { id: 'clients', label: 'Clientes', icon: 'Users' },
     { id: 'company', label: 'Empresa', icon: 'Building2' },
+    { id: 'email', label: 'Correo Electrónico', icon: 'Mail' },
+    { id: 'templates', label: 'Plantillas', icon: 'FileText' },
     { id: 'okrs', label: 'OKRs', icon: 'Target' },
     { id: 'integrations', label: 'Integraciones', icon: 'Plug' }
   ];
@@ -162,7 +164,7 @@ const SystemConfigPanel = ({ config, onSave }) => {
 
             <div>
               <h3 className="text-lg font-heading font-semibold text-foreground mb-4">
-                Configuración Regional
+                Configuración Regional y Financiera
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Select
@@ -189,6 +191,24 @@ const SystemConfigPanel = ({ config, onSave }) => {
                   value={formData?.general?.language}
                   disabled
                 />
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-heading font-semibold text-foreground mb-4">
+                Información de Tasa de Cambio
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                La Tasa Representativa del Mercado (TRM) se actualiza automáticamente desde una API pública cada 24 horas
+              </p>
+              <div className="bg-muted/30 rounded-lg p-4 border border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icon name="TrendingUp" size={20} className="text-success" />
+                  <span className="text-sm font-medium text-foreground">TRM se actualiza automáticamente</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  El sistema obtiene la tasa de cambio USD/COP en tiempo real para los cálculos del dashboard. Esta información se actualiza automáticamente cada 24 horas.
+                </p>
               </div>
             </div>
 
@@ -554,7 +574,11 @@ const SystemConfigPanel = ({ config, onSave }) => {
                 />
               </div>
             </div>
+          </div>
+        )}
 
+        {activeTab === 'email' && (
+          <div className="space-y-6">
             <div>
               <h3 className="text-lg font-heading font-semibold text-foreground mb-4">
                 Configuración de Correo Electrónico
@@ -638,7 +662,11 @@ const SystemConfigPanel = ({ config, onSave }) => {
                 </Button>
               </div>
             </div>
+          </div>
+        )}
 
+        {activeTab === 'templates' && (
+          <div className="space-y-6">
             <div>
               <h3 className="text-lg font-heading font-semibold text-foreground mb-4">
                 Plantillas de Condiciones Comerciales

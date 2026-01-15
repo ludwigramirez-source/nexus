@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { productService } from '../../services/productService';
 import { clientService } from '../../services/clientService';
 import { dashboardService } from '../../services/dashboardService';
@@ -32,11 +32,13 @@ import QuotationModal from './components/QuotationModal';
 import QuotationsTable from './components/QuotationsTable';
 import QuotationFilterToolbar from './components/QuotationFilterToolbar';
 import SendEmailModal from './components/SendEmailModal';
+import SalesFunnelKanban from './components/SalesFunnelKanban';
+import FunnelFilterToolbar from './components/FunnelFilterToolbar';
 import * as XLSX from 'xlsx';
 
 const ProductsAndClientPortfolio = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState('products'); // products, clients, quotations, dashboard
+  const [activeTab, setActiveTab] = useState('products'); // products, clients, quotations, funnel, dashboard
   const [selectedClients, setSelectedClients] = useState([]);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isProductEditModalOpen, setIsProductEditModalOpen] = useState(false);
@@ -83,6 +85,11 @@ const ProductsAndClientPortfolio = () => {
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [selectedQuotationForEmail, setSelectedQuotationForEmail] = useState(null);
   const [companyConfig, setCompanyConfig] = useState(null);
+
+  // Funnel states
+  const [kanbanData, setKanbanData] = useState(null);
+  const [funnelFilters, setFunnelFilters] = useState({});
+  const [funnelLoading, setFunnelLoading] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -196,6 +203,26 @@ const ProductsAndClientPortfolio = () => {
 
     fetchQuotations();
   }, [activeTab, quotationFilters]);
+
+  // Fetch funnel data when funnel tab is active or filters change
+  useEffect(() => {
+    const fetchFunnelData = async () => {
+      if (activeTab === 'funnel') {
+        try {
+          setFunnelLoading(true);
+          const data = await quotationService.getKanbanData(funnelFilters);
+          setKanbanData(data);
+        } catch (error) {
+          console.error('Error loading funnel data:', error);
+          setKanbanData(null);
+        } finally {
+          setFunnelLoading(false);
+        }
+      }
+    };
+
+    fetchFunnelData();
+  }, [activeTab, funnelFilters]);
 
   const filteredProducts = useMemo(() => {
     return products?.filter(product => {
@@ -367,6 +394,23 @@ const ProductsAndClientPortfolio = () => {
     }
   };
 
+  const handleDeleteClient = async (clientId) => {
+    if (!window.confirm('¿Estás seguro de que deseas eliminar este cliente?')) {
+      return;
+    }
+
+    try {
+      const result = await clientService.delete(clientId);
+      if (result.success) {
+        setClients(clients.filter(c => c.id !== clientId));
+        alert('Cliente eliminado exitosamente');
+      }
+    } catch (error) {
+      console.error('Error deleting client:', error);
+      alert('Error al eliminar el cliente: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
   const handleViewDetails = (clientOrProduct) => {
     // Si es un cliente
     if (clientOrProduct?.mrr !== undefined || clientOrProduct?.tier) {
@@ -445,6 +489,23 @@ const ProductsAndClientPortfolio = () => {
     } catch (error) {
       console.error('Error toggling product status:', error);
       alert('Error al cambiar el estado: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const handleDeleteProduct = async (productId) => {
+    if (!window.confirm('¿Estás seguro de que deseas eliminar este producto?')) {
+      return;
+    }
+
+    try {
+      const result = await productService.delete(productId);
+      if (result.success) {
+        setProducts(products.filter(p => p.id !== productId));
+        alert('Producto eliminado exitosamente');
+      }
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      alert('Error al eliminar el producto: ' + (error.response?.data?.message || error.message));
     }
   };
 
@@ -767,6 +828,34 @@ const ProductsAndClientPortfolio = () => {
     setQuotationFilters(newFilters);
   };
 
+  // Funnel handlers
+  const handleFunnelFilterChange = useCallback((newFilters) => {
+    setFunnelFilters(newFilters);
+  }, []);
+
+  const handleFunnelStatusChange = async (quotationId, newStatus) => {
+    try {
+      await quotationService.updateStatus(quotationId, newStatus);
+      // Refresh kanban data
+      const data = await quotationService.getKanbanData(funnelFilters);
+      setKanbanData(data);
+    } catch (error) {
+      console.error('Error updating quotation status:', error);
+      alert('Error al actualizar el estado de la cotización');
+    }
+  };
+
+  const handleFunnelCardClick = async (quotation) => {
+    try {
+      const fullQuotation = await quotationService.getById(quotation.id);
+      setSelectedQuotation(fullQuotation);
+      setIsQuotationModalOpen(true);
+    } catch (error) {
+      console.error('Error fetching quotation:', error);
+      alert('Error al cargar la cotización');
+    }
+  };
+
   const getSortIcon = (key) => {
     if (sortConfig?.key !== key) return 'ChevronsUpDown';
     return sortConfig?.direction === 'asc' ? 'ChevronUp' : 'ChevronDown';
@@ -800,7 +889,7 @@ const ProductsAndClientPortfolio = () => {
 
         <main className="px-4 md:px-6 lg:px-8 py-6 md:py-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className={activeTab !== 'dashboard' && activeTab !== 'quotations' ? 'lg:col-span-9' : 'lg:col-span-12'}>
+            <div className={activeTab !== 'dashboard' && activeTab !== 'quotations' && activeTab !== 'funnel' ? 'lg:col-span-9' : 'lg:col-span-12'}>
           <Breadcrumb />
 
           {/* Tabs Navigation */}
@@ -852,6 +941,19 @@ const ProductsAndClientPortfolio = () => {
                   <span className="bg-muted text-muted-foreground px-2 py-0.5 rounded-full text-xs">
                     {quotations?.length || 0}
                   </span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('funnel')}
+                className={`pb-4 px-1 border-b-2 font-medium text-sm transition-smooth ${
+                  activeTab === 'funnel'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <Icon name="LayoutGrid" size={18} />
+                  <span>Funnel de Ventas</span>
                 </div>
               </button>
               <button
@@ -958,6 +1060,7 @@ const ProductsAndClientPortfolio = () => {
                             product={product}
                             onViewDetails={handleViewDetails}
                             onToggleStatus={handleToggleProductStatus}
+                            onDelete={handleDeleteProduct}
                           />
                         </tr>
                       ))}
@@ -1081,6 +1184,7 @@ const ProductsAndClientPortfolio = () => {
                           onViewDetails={handleViewDetails}
                           onEditClient={handleEditClient}
                           onToggleStatus={handleToggleClientStatus}
+                          onDelete={handleDeleteClient}
                           isSelected={selectedClients?.includes(client?.id)}
                           onSelectChange={handleSelectClient}
                         />
@@ -1147,6 +1251,37 @@ const ProductsAndClientPortfolio = () => {
             </div>
           )}
 
+          {/* Tab: Funnel de Ventas */}
+          {activeTab === 'funnel' && (
+            <div>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-heading font-semibold text-foreground">
+                    Funnel de Ventas
+                  </h2>
+                  <p className="text-sm md:text-base font-caption text-muted-foreground mt-1">
+                    Visualiza y gestiona el pipeline de cotizaciones por estado
+                  </p>
+                </div>
+              </div>
+
+              <FunnelFilterToolbar
+                clients={clients}
+                onFilterChange={handleFunnelFilterChange}
+                loading={funnelLoading}
+              />
+
+              <SalesFunnelKanban
+                kanbanData={kanbanData}
+                loading={funnelLoading}
+                onCardClick={handleFunnelCardClick}
+                onStatusChange={handleFunnelStatusChange}
+                onEmail={handleSendQuotationEmail}
+                onDownloadPDF={handleDownloadPDF}
+              />
+            </div>
+          )}
+
           {/* Tab: Dashboard */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
@@ -1176,8 +1311,8 @@ const ProductsAndClientPortfolio = () => {
           )}
             </div>
 
-            {/* Activity Log Sidebar - Hidden on Dashboard and Quotations tabs */}
-            {activeTab !== 'dashboard' && activeTab !== 'quotations' && (
+            {/* Activity Log Sidebar - Hidden on Dashboard, Quotations, and Funnel tabs */}
+            {activeTab !== 'dashboard' && activeTab !== 'quotations' && activeTab !== 'funnel' && (
               <div className="lg:col-span-3">
                 <ActivityLogSidebar />
               </div>

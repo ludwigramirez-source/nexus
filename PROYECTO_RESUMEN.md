@@ -1248,5 +1248,138 @@ npx prisma db seed
 
 ---
 
-**Última actualización:** 14 de Enero 2026 - 17:00
+### **Sesión 7 - 14 de Enero 2026 (Noche)**
+- ✅ **Reorganización de Configuraciones del Sistema:**
+  - **Separación de tabs de configuración:**
+    - Tab "Empresa": datos de empresa, logo, firmante
+    - Tab "Correo Electrónico": configuración SMTP completa
+    - Tab "Plantillas": términos comerciales, observaciones
+  - **Configuración de TRM automática:**
+    - Eliminado campo manual de TRM
+    - Agregada sección informativa sobre actualización automática
+    - Explicación de que TRM se obtiene de API cada 24 horas
+  - **Archivos modificados:**
+    - `frontend/src/pages/team-and-system-administration/components/SystemConfigPanel.jsx`
+
+- ✅ **Funcionalidad de Eliminación:**
+  - **Productos:**
+    - Botón de eliminar con ícono Trash2
+    - Confirmación con window.confirm antes de eliminar
+    - Actualización de estado local después de eliminar exitosamente
+    - Manejo de errores con mensajes claros
+  - **Clientes:**
+    - Misma funcionalidad de eliminación
+    - Confirmación de usuario requerida
+    - Feedback visual después de eliminar
+  - **Archivos modificados:**
+    - `frontend/src/pages/products-and-client-portfolio/components/ProductTableRow.jsx`
+    - `frontend/src/pages/products-and-client-portfolio/components/ClientTableRow.jsx`
+    - `frontend/src/pages/products-and-client-portfolio/index.jsx`
+
+- ✅ **Búsqueda y Paginación en Modales de Cliente:**
+  - **Búsqueda de productos:**
+    - Campo de búsqueda con ícono Search
+    - Filtrado en tiempo real por nombre, descripción o tipo
+    - Búsqueda case-insensitive
+  - **Paginación:**
+    - 5 productos por página
+    - Botones Anterior/Siguiente
+    - Contador "X - Y de Z productos"
+    - Reset automático a página 1 al buscar
+  - **useMemo para optimización:**
+    - filteredProducts calculado con useMemo
+    - paginatedProducts calculado con useMemo
+    - Evita recalcular en cada render
+  - **Archivos modificados:**
+    - `frontend/src/pages/products-and-client-portfolio/components/ClientCreationModal.jsx`
+    - `frontend/src/pages/products-and-client-portfolio/components/ClientEditModal.jsx`
+
+- ✅ **Corrección Crítica del Dashboard - MRR de Cotizaciones Convertidas:**
+  - **Cambio fundamental:** MRR ahora se calcula SOLO de cotizaciones con estado CONVERTED_TO_ORDER (antes se calculaba de productos asignados a clientes)
+  - **Separación de monedas:**
+    - **mrrUSD:** Total en dólares de cotizaciones convertidas (sin conversión)
+    - **mrrCOP:** Total en pesos de cotizaciones convertidas (sin conversión)
+    - **totalMRRConverted:** Total en USD usando TRM para conversión de COP
+  - **Nueva estructura de tarjetas:**
+    - **Sección 1 - MRR por Moneda (3 tarjetas):**
+      - MRR USD (EEUU): cotizaciones en dólares
+      - MRR COP (Colombia): cotizaciones en pesos
+      - Total MRR Convertido: suma con conversión a USD + badge con TRM y fecha
+    - **Sección 2 - Métricas Generales (8 tarjetas):**
+      - Total Productos, Total Servicios
+      - Facturación Productos, Facturación Servicios
+      - MRR Recurrente, Pagos Únicos
+      - IVA Total, Total Mensual
+      - Badge "Todos los valores en USD"
+  - **Archivos modificados:**
+    - `backend/src/modules/dashboard/dashboard.service.ts`
+    - `frontend/src/pages/products-and-client-portfolio/components/DashboardMetricsCards.jsx`
+
+- ✅ **Integración de TRM desde API Pública:**
+  - **Servicio de Exchange Rate:**
+    - API utilizada: `https://api.exchangerate-api.com/v4/latest/USD`
+    - Cache de 24 horas en memoria
+    - Función `getUSDtoCOPRate()`: retorna rate y lastUpdated
+    - Función `invalidateExchangeRateCache()`: forzar actualización
+  - **Estrategia de fallback:**
+    1. Intentar consultar API
+    2. Si falla, usar cache (aunque esté vencido)
+    3. Si no hay cache, usar valor por defecto (4200)
+  - **Integración con dashboard:**
+    - TRM obtenida al inicio de getMetrics()
+    - Usada para convertir COP a USD en todas las métricas generales
+    - lastUpdated mostrado en dashboard con formato dd/mmm
+  - **Dependencias agregadas:**
+    - axios (instalado con npm install axios)
+  - **Archivos creados:**
+    - `backend/src/utils/exchangeRateService.ts`
+  - **Archivos modificados:**
+    - `backend/src/modules/dashboard/dashboard.service.ts`
+    - `backend/package.json`
+
+- ✅ **FIX CRÍTICO: Corrección de Mezcla de Monedas:**
+  - **Problema crítico:** Dashboard sumaba pesos colombianos (COP) con dólares (USD) sin conversión en "Métricas Generales"
+  - **Solución implementada:**
+    - Conversión a USD antes de sumar a totales:
+      ```typescript
+      const subtotalUSD = quotation.currency === 'COP'
+        ? subtotal / exchangeRate
+        : subtotal;
+      ```
+    - Aplicado a: subtotal, vatAmount
+    - Todos los totales ahora en USD consistente:
+      - monthlyProductRevenue (USD)
+      - monthlyServiceRevenue (USD)
+      - recurringMRR (USD)
+      - oneTimeMRR (USD)
+      - totalVAT (USD)
+      - totalMonthlyRevenue (USD)
+  - **Separación preservada:**
+    - mrrUSD y mrrCOP mantienen valores en moneda original
+    - Solo las métricas agregadas se convierten a USD
+  - **Indicadores visuales:**
+    - Badge "Todos los valores en USD" en sección de Métricas Generales
+    - Subtítulos con "(USD)" o "Convertido a USD"
+  - **Archivos modificados:**
+    - `backend/src/modules/dashboard/dashboard.service.ts` (líneas 99-121)
+    - `frontend/src/pages/products-and-client-portfolio/components/DashboardMetricsCards.jsx` (líneas 99-102, 129, 138, 147, 156, 165)
+
+- **Errores resueltos:**
+  - ❌ Module 'axios' not found → ✅ npm install axios
+  - ❌ Pesos + Dólares sumados sin conversión → ✅ Conversión a USD implementada
+  - ❌ TRM manual desactualizada → ✅ API automática con cache de 24h
+
+- **Resultado final:**
+  - ✅ Dashboard con métricas precisas y separadas por moneda
+  - ✅ Conversión automática COP → USD en métricas generales
+  - ✅ TRM actualizada automáticamente cada 24 horas
+  - ✅ Eliminación de productos/clientes funcional
+  - ✅ Búsqueda y paginación en modales de clientes
+  - ✅ Configuración organizada en 3 tabs
+
+- ⏱️ Tiempo: ~3 horas
+
+---
+
+**Última actualización:** 14 de Enero 2026 - 22:00
 **Desarrollado por:** Claude Code + Usuario

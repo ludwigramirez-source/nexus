@@ -4,7 +4,7 @@ import Select from '../../../components/ui/Select';
 import { Checkbox } from '../../../components/ui/Checkbox';
 import Button from '../../../components/ui/Button';
 
-const ClientTableRow = ({ client, onTierChange, onViewDetails, onEditClient, onToggleStatus, isSelected, onSelectChange }) => {
+const ClientTableRow = ({ client, onTierChange, onViewDetails, onEditClient, onToggleStatus, onDelete, isSelected, onSelectChange }) => {
 
   const getTierLabel = (tier) => {
     const labels = {
@@ -156,6 +156,14 @@ const ClientTableRow = ({ client, onTierChange, onViewDetails, onEditClient, onT
             iconName="Edit"
             onClick={() => onEditClient(client)}
             title="Editar cliente"
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            iconName="Trash2"
+            onClick={() => onDelete(client?.id)}
+            title="Eliminar cliente"
+            className="text-error hover:text-error hover:bg-error/10"
           />
         </div>
       </td>

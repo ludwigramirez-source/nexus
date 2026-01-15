@@ -12,12 +12,14 @@ const QuotationsTable = ({
   onUpdateStatus
 }) => {
   const [actionMenuOpen, setActionMenuOpen] = useState(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
 
   // Get status badge classes
   const getStatusBadge = (status) => {
     const badges = {
       DRAFT: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Borrador' },
       SENT: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Enviada' },
+      NEGOTIATING: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'En Negociación' },
       ACCEPTED: { bg: 'bg-green-100', text: 'text-green-800', label: 'Aceptada' },
       REJECTED: { bg: 'bg-red-100', text: 'text-red-800', label: 'Rechazada' },
       EXPIRED: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Vencida' },
@@ -54,8 +56,18 @@ const QuotationsTable = ({
   };
 
   // Handle action menu toggle
-  const toggleActionMenu = (quotationId) => {
-    setActionMenuOpen(actionMenuOpen === quotationId ? null : quotationId);
+  const toggleActionMenu = (quotationId, event) => {
+    if (actionMenuOpen === quotationId) {
+      setActionMenuOpen(null);
+    } else {
+      const button = event.currentTarget;
+      const rect = button.getBoundingClientRect();
+      setMenuPosition({
+        top: rect.top - 10, // Slightly above the button
+        right: window.innerWidth - rect.right
+      });
+      setActionMenuOpen(quotationId);
+    }
   };
 
   // Status change options based on current status
@@ -66,9 +78,15 @@ const QuotationsTable = ({
         { value: 'REJECTED', label: 'Marcar como Rechazada', icon: 'XCircle' }
       ],
       SENT: [
+        { value: 'NEGOTIATING', label: 'Marcar como En Negociación', icon: 'MessageSquare' },
         { value: 'ACCEPTED', label: 'Marcar como Aceptada', icon: 'CheckCircle' },
         { value: 'REJECTED', label: 'Marcar como Rechazada', icon: 'XCircle' },
         { value: 'EXPIRED', label: 'Marcar como Vencida', icon: 'Clock' }
+      ],
+      NEGOTIATING: [
+        { value: 'ACCEPTED', label: 'Marcar como Aceptada', icon: 'CheckCircle' },
+        { value: 'REJECTED', label: 'Marcar como Rechazada', icon: 'XCircle' },
+        { value: 'SENT', label: 'Volver a Enviada', icon: 'Send' }
       ],
       ACCEPTED: [
         { value: 'CONVERTED_TO_ORDER', label: 'Convertir en Venta', icon: 'ShoppingCart' }
@@ -227,18 +245,25 @@ const QuotationsTable = ({
                             variant="ghost"
                             size="icon"
                             iconName="MoreVertical"
-                            onClick={() => toggleActionMenu(quotation.id)}
+                            onClick={(e) => toggleActionMenu(quotation.id, e)}
                             title="Más acciones"
                           />
                           {actionMenuOpen === quotation.id && (
                             <>
                               {/* Backdrop */}
                               <div
-                                className="fixed inset-0 z-10"
+                                className="fixed inset-0 z-[100]"
                                 onClick={() => setActionMenuOpen(null)}
                               />
                               {/* Menu */}
-                              <div className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-lg shadow-elevation-3 z-20 py-1">
+                              <div
+                                className="fixed w-56 bg-card border border-border rounded-lg shadow-elevation-3 z-[101] py-1"
+                                style={{
+                                  top: `${menuPosition.top}px`,
+                                  right: `${menuPosition.right}px`,
+                                  transform: 'translateY(-100%)'
+                                }}
+                              >
                                 {statusOptions.map((option) => (
                                   <button
                                     key={option.value}

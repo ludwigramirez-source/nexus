@@ -185,5 +185,51 @@ export const quotationService = {
       console.error('Error sending email:', error);
       throw error;
     }
+  },
+
+  /**
+   * Get kanban data (quotations grouped by status for sales funnel)
+   * @param {Object} filters - Filter options
+   * @param {string} filters.clientId - Filter by client ID
+   * @param {string} filters.dateFrom - Filter by date from (ISO string)
+   * @param {string} filters.dateTo - Filter by date to (ISO string)
+   * @param {number} filters.minAmount - Filter by minimum amount
+   * @param {number} filters.maxAmount - Filter by maximum amount
+   * @param {string} filters.currency - Filter by currency
+   * @param {string} filters.search - Search by quotation number or client name
+   * @returns {Promise<Object>} Kanban data with columns
+   */
+  async getKanbanData(filters = {}) {
+    try {
+      const params = new URLSearchParams();
+
+      if (filters.clientId) {
+        params.append('clientId', filters.clientId);
+      }
+      if (filters.dateFrom) {
+        params.append('dateFrom', filters.dateFrom);
+      }
+      if (filters.dateTo) {
+        params.append('dateTo', filters.dateTo);
+      }
+      if (filters.minAmount) {
+        params.append('minAmount', filters.minAmount);
+      }
+      if (filters.maxAmount) {
+        params.append('maxAmount', filters.maxAmount);
+      }
+      if (filters.currency) {
+        params.append('currency', filters.currency);
+      }
+      if (filters.search) {
+        params.append('search', filters.search);
+      }
+
+      const response = await api.get(`/quotations/kanban?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching kanban data:', error);
+      throw error;
+    }
   }
 };

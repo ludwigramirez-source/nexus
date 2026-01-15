@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import Select from '../../../components/ui/Select';
+import Icon from '../../../components/AppIcon';
 
 const ClientEditModal = ({ isOpen, onClose, onSave, client, products = [] }) => {
   const [formData, setFormData] = useState({
@@ -24,6 +25,9 @@ const ClientEditModal = ({ isOpen, onClose, onSave, client, products = [] }) => 
   });
 
   const [errors, setErrors] = useState({});
+  const [productSearch, setProductSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   useEffect(() => {
     if (isOpen && client) {
@@ -45,8 +49,35 @@ const ClientEditModal = ({ isOpen, onClose, onSave, client, products = [] }) => 
         status: client.status || 'ACTIVE'
       });
       setErrors({});
+      setProductSearch('');
+      setCurrentPage(1);
     }
   }, [isOpen, client]);
+
+  // Filtrar y paginar productos
+  const filteredProducts = useMemo(() => {
+    if (!productSearch.trim()) return products;
+
+    const searchLower = productSearch.toLowerCase();
+    return products.filter(product =>
+      product.name.toLowerCase().includes(searchLower) ||
+      product.description?.toLowerCase().includes(searchLower) ||
+      product.type.toLowerCase().includes(searchLower)
+    );
+  }, [products, productSearch]);
+
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredProducts.slice(startIndex, endIndex);
+  }, [filteredProducts, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+
+  // Reset a página 1 cuando cambia la búsqueda
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [productSearch]);
 
   const tierOptions = [
     { value: 'ENTERPRISE', label: 'Enterprise' },
@@ -220,46 +251,104 @@ const ClientEditModal = ({ isOpen, onClose, onSave, client, products = [] }) => 
                 No hay productos disponibles. Crea productos primero para asociarlos.
               </div>
             ) : (
-              <div className="space-y-2 max-h-48 overflow-y-auto border border-border rounded-lg p-3">
-                {products.map((product) => {
-                  const isSelected = formData?.products?.includes(product.id);
-                  return (
-                    <label
-                      key={product.id}
-                      className={`flex items-center justify-between p-2 rounded cursor-pointer transition-smooth hover:bg-muted/50 ${
-                        isSelected ? 'bg-primary/10 border border-primary/30' : 'border border-transparent'
-                      }`}
+              <>
+                {/* Campo de búsqueda */}
+                <div className="relative">
+                  <Input
+                    type="text"
+                    placeholder="Buscar productos o servicios..."
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    prefix={<Icon name="Search" size={16} />}
+                  />
+                  {productSearch && (
+                    <button
+                      onClick={() => setProductSearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      <div className="flex items-center flex-1">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={(e) => {
-                            const newProducts = e.target.checked
-                              ? [...(formData?.products || []), product.id]
-                              : (formData?.products || []).filter(id => id !== product.id);
-                            setFormData(prev => ({ ...prev, products: newProducts }));
-                          }}
-                          className="w-4 h-4 text-primary border-border rounded focus:ring-primary focus:ring-2"
-                        />
-                        <div className="ml-3 flex-1">
-                          <span className="text-sm font-medium text-foreground">{product.name}</span>
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            ({product.type === 'PRODUCT' ? 'Producto' : 'Servicio'})
+                      <Icon name="X" size={16} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Lista de productos paginados */}
+                {filteredProducts.length === 0 ? (
+                  <div className="text-sm text-muted-foreground bg-muted/50 rounded-lg p-4 text-center">
+                    No se encontraron productos que coincidan con "{productSearch}"
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2 border border-border rounded-lg p-3">
+                      {paginatedProducts.map((product) => {
+                        const isSelected = formData?.products?.includes(product.id);
+                        return (
+                          <label
+                            key={product.id}
+                            className={`flex items-center justify-between p-2 rounded cursor-pointer transition-smooth hover:bg-muted/50 ${
+                              isSelected ? 'bg-primary/10 border border-primary/30' : 'border border-transparent'
+                            }`}
+                          >
+                            <div className="flex items-center flex-1">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  const newProducts = e.target.checked
+                                    ? [...(formData?.products || []), product.id]
+                                    : (formData?.products || []).filter(id => id !== product.id);
+                                  setFormData(prev => ({ ...prev, products: newProducts }));
+                                }}
+                                className="w-4 h-4 text-primary border-border rounded focus:ring-primary focus:ring-2"
+                              />
+                              <div className="ml-3 flex-1">
+                                <span className="text-sm font-medium text-foreground">{product.name}</span>
+                                <span className="ml-2 text-xs text-muted-foreground">
+                                  ({product.type === 'PRODUCT' ? 'Producto' : 'Servicio'})
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-sm font-semibold text-foreground">
+                              {new Intl.NumberFormat('en-US', {
+                                style: 'currency',
+                                currency: product.currency || 'USD',
+                                minimumFractionDigits: 0
+                              }).format(product.price || 0)}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    {/* Controles de paginación */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between pt-2">
+                        <div className="text-sm text-muted-foreground">
+                          Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredProducts.length)} de {filteredProducts.length} productos
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            iconName="ChevronLeft"
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            disabled={currentPage === 1}
+                          />
+                          <span className="text-sm font-medium text-foreground">
+                            {currentPage} / {totalPages}
                           </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            iconName="ChevronRight"
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={currentPage === totalPages}
+                          />
                         </div>
                       </div>
-                      <div className="text-sm font-semibold text-foreground">
-                        {new Intl.NumberFormat('en-US', {
-                          style: 'currency',
-                          currency: product.currency || 'USD',
-                          minimumFractionDigits: 0
-                        }).format(product.price || 0)}
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
+                    )}
+                  </>
+                )}
+              </>
             )}
 
             {/* MRR Calculado */}
