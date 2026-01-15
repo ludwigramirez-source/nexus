@@ -352,6 +352,7 @@ export const quotationsService = {
 
     // Update quotation
     const updateData: Prisma.QuotationUpdateInput = {
+      clientId: data.clientId,
       validUntil: data.validUntil ? new Date(data.validUntil) : undefined,
       currency: data.currency,
       deliveryTime: data.deliveryTime,

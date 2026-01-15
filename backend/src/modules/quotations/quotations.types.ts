@@ -31,6 +31,7 @@ export interface CreateQuotationDTO {
 // ============================================
 
 export interface UpdateQuotationDTO {
+  clientId?: string;
   validUntil?: Date | string;
   status?: QuotationStatus;
   currency?: string;

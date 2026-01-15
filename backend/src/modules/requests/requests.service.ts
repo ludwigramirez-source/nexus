@@ -15,6 +15,41 @@ import type {
   CommentResponse,
 } from './requests.types';
 
+/**
+ * Generate request number: REQ-{consecutive}
+ * Format: REQ-1001, REQ-1002, etc.
+ */
+async function generateRequestNumber(): Promise<string> {
+  // Get the last request
+  const lastRequest = await prisma.request.findFirst({
+    where: {
+      requestNumber: {
+        startsWith: 'REQ-'
+      }
+    },
+    orderBy: {
+      requestNumber: 'desc'
+    }
+  });
+
+  let consecutive = 1001;
+
+  if (lastRequest && lastRequest.requestNumber) {
+    // Extract consecutive number from last request
+    const parts = lastRequest.requestNumber.split('-');
+    if (parts.length === 2) {
+      const lastConsecutive = parseInt(parts[1], 10);
+      if (!isNaN(lastConsecutive)) {
+        consecutive = lastConsecutive + 1;
+      }
+    }
+  }
+
+  // Format: REQ-1001
+  const requestNumber = `REQ-${consecutive}`;
+  return requestNumber;
+}
+
 export class RequestsService {
   /**
    * Get all requests with filters and pagination
@@ -88,13 +123,9 @@ export class RequestsService {
           },
           assignedUsers: {
             select: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                },
-              },
+              id: true,
+              name: true,
+              email: true,
             },
           },
           _count: {
@@ -140,13 +171,9 @@ export class RequestsService {
           },
           assignedUsers: {
             select: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                },
-              },
+              id: true,
+              name: true,
+              email: true,
             },
           },
           _count: {
@@ -174,8 +201,12 @@ export class RequestsService {
    */
   static async create(data: CreateRequestDTO, userId: string): Promise<RequestResponse> {
     try {
+      // Generate auto-numeric request number
+      const requestNumber = await generateRequestNumber();
+
       const request = await prisma.request.create({
         data: {
+          requestNumber,
           title: data.title,
           description: data.description,
           type: data.type,
@@ -188,9 +219,7 @@ export class RequestsService {
           status: 'INTAKE',
           assignedUsers: data.assignedUserIds
             ? {
-                create: data.assignedUserIds.map((userId) => ({
-                  userId,
-                })),
+                connect: data.assignedUserIds.map((userId) => ({ id: userId })),
               }
             : undefined,
         },
@@ -203,13 +232,9 @@ export class RequestsService {
           },
           assignedUsers: {
             select: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                },
-              },
+              id: true,
+              name: true,
+              email: true,
             },
           },
           _count: {
@@ -291,13 +316,9 @@ export class RequestsService {
           },
           assignedUsers: {
             select: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                },
-              },
+              id: true,
+              name: true,
+              email: true,
             },
           },
           _count: {
@@ -339,15 +360,24 @@ export class RequestsService {
 
   /**
    * Delete request
+   * Business rule: Cannot delete requests with assigned users
    */
   static async delete(id: string): Promise<void> {
     try {
       const request = await prisma.request.findUnique({
         where: { id },
+        include: {
+          assignedUsers: true,
+        },
       });
 
       if (!request) {
         throw new AppError('Request not found', 404);
+      }
+
+      // Business rule: Cannot delete if has assigned users
+      if (request.assignedUsers && request.assignedUsers.length > 0) {
+        throw new AppError('Cannot delete a request with assigned users. Please unassign all users first.', 400);
       }
 
       await prisma.request.delete({
@@ -397,13 +427,9 @@ export class RequestsService {
           },
           assignedUsers: {
             select: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                },
-              },
+              id: true,
+              name: true,
+              email: true,
             },
           },
           _count: {
@@ -492,13 +518,9 @@ export class RequestsService {
           },
           assignedUsers: {
             select: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                },
-              },
+              id: true,
+              name: true,
+              email: true,
             },
           },
           _count: {
@@ -617,7 +639,6 @@ export class RequestsService {
       const comments = await prisma.comment.findMany({
         where: {
           requestId,
-          parentId: null, // Only root comments
         },
         orderBy: { createdAt: 'desc' },
         include: {
@@ -627,18 +648,6 @@ export class RequestsService {
               name: true,
               email: true,
             },
-          },
-          replies: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                },
-              },
-            },
-            orderBy: { createdAt: 'asc' },
           },
         },
       });
@@ -663,23 +672,11 @@ export class RequestsService {
         throw new AppError('Request not found', 404);
       }
 
-      // If parentId is provided, verify it exists
-      if (data.parentId) {
-        const parentComment = await prisma.comment.findUnique({
-          where: { id: data.parentId },
-        });
-
-        if (!parentComment) {
-          throw new AppError('Parent comment not found', 404);
-        }
-      }
-
       const comment = await prisma.comment.create({
         data: {
           requestId,
           userId,
           content: data.content,
-          parentId: data.parentId,
         },
         include: {
           user: {
@@ -717,6 +714,7 @@ export class RequestsService {
   private static formatRequestResponse(request: any): RequestResponse {
     return {
       id: request.id,
+      requestNumber: request.requestNumber,
       title: request.title,
       description: request.description,
       type: request.type,
@@ -731,7 +729,7 @@ export class RequestsService {
       createdBy: { id: request.requestedBy, name: 'Unknown', email: 'Unknown@example.com' },
       product: request.product,
       client: request.client,
-      assignedUsers: request.assignedUsers?.map((a: any) => a.user),
+      assignedUsers: request.assignedUsers,
       _count: request._count,
     };
   }

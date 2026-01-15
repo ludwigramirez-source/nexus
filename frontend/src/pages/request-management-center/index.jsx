@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { requestService } from '../../services/requestService';
 import socketService from '../../services/socketService';
+import api from '../../services/api';
+import * as XLSX from 'xlsx';
 import Sidebar from '../../components/ui/Sidebar';
 import UserProfileHeader from '../../components/ui/UserProfileHeader';
 import NotificationCenter from '../../components/ui/NotificationCenter';
@@ -14,13 +16,16 @@ import BulkActionsToolbar from './components/BulkActionsToolbar';
 import SearchBar from './components/SearchBar';
 import RequestCreationModal from './components/RequestCreationModal';
 import RequestDetailModal from './components/RequestDetailModal';
+import Pagination from './components/Pagination';
 
 const RequestManagementCenter = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(true);
+  const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState('table');
   const [selectedRequests, setSelectedRequests] = useState([]);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [requestToEdit, setRequestToEdit] = useState(null);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [filters, setFilters] = useState({
@@ -30,8 +35,71 @@ const RequestManagementCenter = () => {
     assignee: [],
     client: []
   });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10); // Elementos por página
 
-const [requests, setRequests] = useState([]);  const [loading, setLoading] = useState(true);  // Cargar requests desde la API  useEffect(() => {    const fetchRequests = async () => {      try {        setLoading(true);        const data = await requestService.getAll(filters);        setRequests(data.data || []);      } catch (error) {        console.error("Error loading requests:", error);        setRequests([]);      } finally {        setLoading(false);      }    };    fetchRequests();    // Setup Socket.io listeners for real-time updates    socketService.connect();        const handleRequestCreated = (newRequest) => {      setRequests((prev) => [newRequest, ...prev]);    };        const handleRequestUpdated = (updatedRequest) => {      setRequests((prev) =>        prev.map((r) => (r.id === updatedRequest.id ? updatedRequest : r))      );    };        socketService.on("request:created", handleRequestCreated);    socketService.on("request:updated", handleRequestUpdated);        return () => {      socketService.off("request:created", handleRequestCreated);      socketService.off("request:updated", handleRequestUpdated);    };  }, [filters]);
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState([]);
+  const [clients, setClients] = useState([]);
+
+  // Cargar datos iniciales
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        // Cargar clientes
+        const clientsRes = await api.get('/clients').catch(() => ({ data: { data: [] } }));
+        setClients(clientsRes.data?.data || []);
+
+        // Usar teamMembers como usuarios (hasta que se implemente el módulo de usuarios)
+        setUsers(teamMembers);
+      } catch (error) {
+        console.error("Error loading initial data:", error);
+      }
+    };
+
+    fetchInitialData();
+  }, []);
+
+  // Cargar requests desde la API
+  useEffect(() => {
+    const fetchRequests = async () => {
+      try {
+        setLoading(true);
+        const data = await requestService.getAll(filters);
+        setRequests(data.data || []);
+      } catch (error) {
+        console.error("Error loading requests:", error);
+        setRequests([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRequests();
+
+    // Setup Socket.io listeners for real-time updates
+    socketService.connect();
+
+    const handleRequestCreated = (newRequest) => {
+      setRequests((prev) => [newRequest, ...prev]);
+    };
+
+    const handleRequestUpdated = (updatedRequest) => {
+      setRequests((prev) =>
+        prev.map((r) => (r.id === updatedRequest.id ? updatedRequest : r))
+      );
+    };
+
+    socketService.on("request:created", handleRequestCreated);
+    socketService.on("request:updated", handleRequestUpdated);
+
+    return () => {
+      socketService.off("request:created", handleRequestCreated);
+      socketService.off("request:updated", handleRequestUpdated);
+    };
+  }, [filters]);
 
   const teamMembers = [
     { 
@@ -76,6 +144,7 @@ const [requests, setRequests] = useState([]);  const [loading, setLoading] = use
 
   const handleFilterChange = (key, values) => {
     setFilters({ ...filters, [key]: values });
+    setCurrentPage(1); // Resetear a página 1 cuando se filtra
   };
 
   const handleClearFilters = () => {
@@ -86,6 +155,12 @@ const [requests, setRequests] = useState([]);  const [loading, setLoading] = use
       assignee: [],
       client: []
     });
+    setCurrentPage(1); // Resetear a página 1 cuando se limpian filtros
+  };
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleRequestSelect = (ids) => {
@@ -137,16 +212,82 @@ const [requests, setRequests] = useState([]);  const [loading, setLoading] = use
     console.log('Inline edit:', requestId, field, value);
   };
 
-  const handleSearch = (searchTerm) => {
-    console.log('Search:', searchTerm);
+  const handleSearch = (term) => {
+    setSearchTerm(term);
+    setCurrentPage(1); // Resetear a página 1 cuando se busca
   };
 
   const handleDateRangeChange = (dateRange) => {
     console.log('Date range:', dateRange);
   };
 
-  const handleSavedFilterSelect = (filterId) => {
-    console.log('Saved filter:', filterId);
+  const handleExportToExcel = () => {
+    try {
+      const typeLabels = {
+        PRODUCT_FEATURE: 'Producto',
+        CUSTOMIZATION: 'Personalización',
+        BUG: 'Error',
+        SUPPORT: 'Soporte',
+        INFRASTRUCTURE: 'Infraestructura'
+      };
+
+      const statusLabels = {
+        INTAKE: 'Intake',
+        BACKLOG: 'Backlog',
+        IN_PROGRESS: 'En Progreso',
+        REVIEW: 'En Revisión',
+        DONE: 'Completado',
+        REJECTED: 'Rechazado'
+      };
+
+      const priorityLabels = {
+        CRITICAL: 'Crítica',
+        HIGH: 'Alta',
+        MEDIUM: 'Media',
+        LOW: 'Baja'
+      };
+
+      // Preparar datos para Excel
+      const excelData = filteredRequests.map(req => ({
+        'Número': req.requestNumber || `#${req.id?.substring(0, 8)}`,
+        'Título': req.title,
+        'Descripción': req.description,
+        'Tipo': typeLabels[req.type] || req.type,
+        'Estado': statusLabels[req.status] || req.status,
+        'Prioridad': priorityLabels[req.priority] || req.priority,
+        'Cliente': req.client?.name || '-',
+        'Usuarios Asignados': req.assignedUsers?.map(u => u.name).join(', ') || 'Sin asignar',
+        'Horas Estimadas': req.estimatedHours,
+        'Horas Reales': req.actualHours || 0,
+        'Fecha Creación': new Date(req.createdAt).toLocaleDateString('es-MX'),
+        'Última Actualización': new Date(req.updatedAt).toLocaleDateString('es-MX')
+      }));
+
+      // Crear libro de Excel
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Solicitudes');
+
+      // Ajustar ancho de columnas
+      const maxWidth = 50;
+      const colWidths = Object.keys(excelData[0] || {}).map(key => ({
+        wch: Math.min(
+          Math.max(
+            key.length,
+            ...excelData.map(row => String(row[key] || '').length)
+          ) + 2,
+          maxWidth
+        )
+      }));
+      worksheet['!cols'] = colWidths;
+
+      // Descargar archivo
+      const fileName = `solicitudes_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Error al exportar. Por favor intenta de nuevo.');
+    }
   };
 
   const handleRequestMove = (requestId, newStatus) => {
@@ -159,9 +300,54 @@ const [requests, setRequests] = useState([]);  const [loading, setLoading] = use
     );
   };
 
-  const handleCreateRequest = (requestData) => {
-    console.log('Creating request:', requestData);
+  const handleSaveRequest = (savedRequest, isEdit = false) => {
+    if (isEdit) {
+      // Actualizar solicitud existente
+      console.log('Request updated:', savedRequest);
+      setRequests((prev) =>
+        prev.map((r) => (r.id === savedRequest.id ? savedRequest : r))
+      );
+    } else {
+      // Agregar nueva solicitud al principio de la lista
+      console.log('Request created:', savedRequest);
+      setRequests((prev) => [savedRequest, ...prev]);
+    }
     setIsRequestModalOpen(false);
+    setIsEditMode(false);
+    setRequestToEdit(null);
+  };
+
+  const handleEditRequest = (requestId) => {
+    const request = requests?.find(r => r?.id === requestId);
+    if (request) {
+      setRequestToEdit(request);
+      setIsEditMode(true);
+      setIsRequestModalOpen(true);
+    }
+  };
+
+  const handleDeleteRequest = async (requestId) => {
+    const request = requests?.find(r => r?.id === requestId);
+
+    // Regla de negocio: no se puede eliminar si tiene usuarios asignados
+    if (request?.assignedUsers && request?.assignedUsers?.length > 0) {
+      alert('No se puede eliminar una solicitud que tiene usuarios asignados. Por favor, desasigne a todos los usuarios primero.');
+      return;
+    }
+
+    if (confirm(`¿Estás seguro de eliminar la solicitud ${request?.requestNumber}?\n\nEsta acción no se puede deshacer.`)) {
+      try {
+        await requestService.delete(requestId);
+        setRequests(prev => prev.filter(r => r.id !== requestId));
+        console.log('Request deleted:', requestId);
+      } catch (error) {
+        console.error('Error deleting request:', error);
+        const errorMessage = error?.response?.data?.message ||
+                            error?.response?.data?.error ||
+                            'Error al eliminar la solicitud';
+        alert(errorMessage);
+      }
+    }
   };
 
   const handleRequestClick = (requestId) => {
@@ -172,15 +358,47 @@ const [requests, setRequests] = useState([]);  const [loading, setLoading] = use
     }
   };
 
-  const filteredRequests = requests?.filter(request => {
+  // Primero filtrar todas las solicitudes
+  const allFilteredRequests = requests?.filter(request => {
+    // Filtros por checkboxes
     const matchesType = filters?.type?.length === 0 || filters?.type?.includes(request?.type);
     const matchesStatus = filters?.status?.length === 0 || filters?.status?.includes(request?.status);
     const matchesPriority = filters?.priority?.length === 0 || filters?.priority?.includes(request?.priority);
     const matchesAssignee = filters?.assignee?.length === 0 || filters?.assignee?.includes(request?.assignee?.name || '');
     const matchesClient = filters?.client?.length === 0 || filters?.client?.includes(request?.client);
-    
-    return matchesType && matchesStatus && matchesPriority && matchesAssignee && matchesClient;
+
+    // Filtro por búsqueda
+    let matchesSearch = true;
+    if (searchTerm && searchTerm.trim() !== '') {
+      const search = searchTerm.toLowerCase().trim();
+      matchesSearch =
+        // Buscar en número de solicitud
+        (request?.requestNumber?.toLowerCase()?.includes(search)) ||
+        // Buscar en título
+        (request?.title?.toLowerCase()?.includes(search)) ||
+        // Buscar en descripción
+        (request?.description?.toLowerCase()?.includes(search)) ||
+        // Buscar en nombre de cliente
+        (request?.client?.name?.toLowerCase()?.includes(search)) ||
+        // Buscar en usuarios asignados
+        (request?.assignedUsers?.some(user =>
+          user?.name?.toLowerCase()?.includes(search)
+        ));
+    }
+
+    return matchesType && matchesStatus && matchesPriority && matchesAssignee && matchesClient && matchesSearch;
   });
+
+  // Calcular paginación
+  const totalPages = Math.ceil(allFilteredRequests.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+
+  // Obtener solo los elementos de la página actual
+  const paginatedRequests = allFilteredRequests.slice(startIndex, endIndex);
+
+  // Para exportar, usar todos los filtrados
+  const filteredRequests = allFilteredRequests;
 
   return (
     <div className="min-h-screen bg-background">
@@ -215,7 +433,6 @@ const [requests, setRequests] = useState([]);  const [loading, setLoading] = use
             <SearchBar
               onSearch={handleSearch}
               onDateRangeChange={handleDateRangeChange}
-              onSavedFilterSelect={handleSavedFilterSelect}
             />
           </div>
 
@@ -229,14 +446,23 @@ const [requests, setRequests] = useState([]);  const [loading, setLoading] = use
               >
                 Filtros
               </Button>
-              <Button variant="outline" iconName="Download" iconPosition="left">
+              <Button
+                variant="outline"
+                iconName="Download"
+                iconPosition="left"
+                onClick={handleExportToExcel}
+              >
                 Exportar
               </Button>
-              <Button 
-                variant="default" 
-                iconName="Plus" 
+              <Button
+                variant="default"
+                iconName="Plus"
                 iconPosition="left"
-                onClick={() => setIsRequestModalOpen(true)}
+                onClick={() => {
+                  setIsEditMode(false);
+                  setRequestToEdit(null);
+                  setIsRequestModalOpen(true);
+                }}
               >
                 Nueva Solicitud
               </Button>
@@ -272,6 +498,9 @@ const [requests, setRequests] = useState([]);  const [loading, setLoading] = use
                     filters={filters}
                     onFilterChange={handleFilterChange}
                     onClearFilters={handleClearFilters}
+                    requests={requests}
+                    users={users}
+                    clients={clients}
                   />
                 </div>
               </div>
@@ -280,20 +509,31 @@ const [requests, setRequests] = useState([]);  const [loading, setLoading] = use
             <div className={`flex-1 ${isFilterSidebarOpen ? 'lg:w-3/4' : 'w-full'}`}>
               <div className="bg-card rounded-lg border border-border shadow-elevation-2 overflow-hidden">
                 {viewMode === 'table' ? (
-                  <div className="overflow-x-auto">
-                    <RequestTable
-                      requests={filteredRequests}
-                      onRequestSelect={handleRequestSelect}
-                      selectedRequests={selectedRequests}
-                      onBulkAction={handleBulkAction}
-                      onInlineEdit={handleInlineEdit}
-                      onRequestClick={handleRequestClick}
+                  <>
+                    <div className="overflow-x-auto">
+                      <RequestTable
+                        requests={paginatedRequests}
+                        onRequestSelect={handleRequestSelect}
+                        selectedRequests={selectedRequests}
+                        onBulkAction={handleBulkAction}
+                        onInlineEdit={handleInlineEdit}
+                        onRequestClick={handleRequestClick}
+                        onEditRequest={handleEditRequest}
+                        onDeleteRequest={handleDeleteRequest}
+                      />
+                    </div>
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      onPageChange={handlePageChange}
+                      totalItems={allFilteredRequests.length}
+                      itemsPerPage={itemsPerPage}
                     />
-                  </div>
+                  </>
                 ) : (
                   <div className="p-4 md:p-5 lg:p-6 h-[calc(100vh-20rem)] overflow-y-auto">
-                    <KanbanBoard 
-                      requests={filteredRequests} 
+                    <KanbanBoard
+                      requests={filteredRequests}
                       onRequestMove={handleRequestMove}
                       onRequestClick={handleRequestClick}
                     />
@@ -314,8 +554,14 @@ const [requests, setRequests] = useState([]);  const [loading, setLoading] = use
 
       <RequestCreationModal
         isOpen={isRequestModalOpen}
-        onClose={() => setIsRequestModalOpen(false)}
-        onSave={handleCreateRequest}
+        onClose={() => {
+          setIsRequestModalOpen(false);
+          setIsEditMode(false);
+          setRequestToEdit(null);
+        }}
+        onSave={handleSaveRequest}
+        isEditMode={isEditMode}
+        initialData={requestToEdit}
       />
 
       {isDetailModalOpen && selectedRequest && (

@@ -1382,7 +1382,195 @@ npx prisma db seed
 
 - ⏱️ Tiempo: ~3 horas
 
+### **Sesión 8 - 15 de Enero 2026**
+- ✅ **Sistema Completo de Time Tracking (Rastreo de Tiempo):**
+  - **Backend:**
+    - **Modelo TimeEntry en Prisma:**
+      - Campos: id, requestId, userId, startedAt, pausedAt, endedAt, duration, status, description
+      - Enum TimeEntryStatus: ACTIVE (timer corriendo), PAUSED (pausado), COMPLETED (finalizado)
+      - Relaciones con Request y User
+      - Índices para optimizar queries por requestId, userId, status
+    - **time-entries.service.ts:**
+      - `getByRequestId()`: Obtener todas las entradas de tiempo de una solicitud
+      - `getActiveEntry()`: Obtener entrada activa o pausada del usuario actual
+      - `start()`: Iniciar nueva sesión de tiempo
+      - `pause()`: Pausar sesión activa y calcular duración acumulada
+      - `resume()`: Reanudar sesión pausada (ajusta startedAt para compensar tiempo pausado)
+      - `complete()`: Finalizar sesión y actualizar actualHours del request
+      - `delete()`: Eliminar entrada y recalcular actualHours
+      - **Cálculo de duración:**
+        - ACTIVE: `(now - startedAt) / (1000 * 60 * 60)` en tiempo real
+        - PAUSED: Almacena duración calculada al pausar
+        - COMPLETED: Duración final almacenada permanentemente
+      - **Auto-actualización de actualHours:** Al completar o eliminar, suma todas las entradas COMPLETED
+    - **time-entries.controller.ts:**
+      - 7 endpoints HTTP con validación Zod
+      - Todos protegidos con autenticación (req.user.userId)
+      - Respuestas consistentes con formato `{ success, data, message }`
+    - **time-entries.routes.ts:**
+      - Integrado en `/api/requests/:requestId/time-entries/*`
+      - GET `/` - Listar todas las entradas
+      - GET `/active` - Obtener entrada activa
+      - POST `/start` - Iniciar sesión
+      - PUT `/pause` - Pausar sesión
+      - PUT `/resume` - Reanudar sesión
+      - PUT `/complete` - Completar sesión
+      - DELETE `/:timeEntryId` - Eliminar entrada
+    - **Migración Prisma:**
+      - `npx prisma generate` para regenerar cliente
+      - `npx prisma db push` para sincronizar schema con DB
+
+  - **Frontend:**
+    - **timeEntryService.js:**
+      - Cliente API completo para consumir todos los endpoints
+      - Manejo de errores y respuestas
+    - **TimeTracker.jsx:**
+      - **Timer en tiempo real:**
+        - useEffect con setInterval que actualiza cada segundo
+        - Formato HH:MM:SS con padStart para ceros a la izquierda
+        - Cálculo desde startedAt hasta now para sesiones ACTIVE
+        - Muestra duración almacenada para sesiones PAUSED
+      - **Tres estados de botones:**
+        - Sin sesión: botón "Iniciar" (verde con icono Play)
+        - ACTIVE: botones "Pausar" (amarillo) y "Completar" (verde)
+        - PAUSED: botones "Reanudar" (azul) y "Completar" (verde)
+      - **Campo de descripción:**
+        - Textarea opcional para notas de la sesión
+        - Se guarda al pausar o completar
+      - **Historial de entradas:**
+        - Lista colapsable con todas las sesiones completadas
+        - Muestra: fecha, duración formateada, descripción, icono de estado
+        - Botón eliminar por entrada (icono Trash2)
+      - **Total de horas:**
+        - Suma de todas las sesiones completadas
+        - Formato legible con formatHours()
+    - **RequestDetailModal.jsx:**
+      - Nuevo tab "Tiempo" junto a Comentarios y Actividad
+      - Integración del componente TimeTracker
+      - Callback onTimeUpdated para refrescar datos del request
+    - **Integración en Request Management:**
+      - Tab "Tiempo" visible en modal de detalles de solicitud
+      - Icono Clock para identificar la pestaña
+      - Layout responsive con padding consistente
+
+  - **Utilidades de Formato de Tiempo (timeFormat.js):**
+    - **formatHours(hours, format):**
+      - `format='short'`: "2h 30m", "45m", "30s" (legible y compacto)
+      - `format='long'`: "02:30:00" (formato HH:MM:SS)
+      - Lógica inteligente: muestra solo unidades no-cero
+      - Maneja casos edge: 0h, menos de 1 segundo
+    - **formatHoursCompact(hours):**
+      - Formato simplificado con 1 decimal: "2.5h"
+      - < 1 hora: muestra en minutos "45m" o segundos "30s"
+      - Ideal para tablas y displays compactos
+    - **Aplicado en:**
+      - `RequestTable.jsx`: columnas "Horas Est." y "Horas Real"
+      - `KanbanBoard.jsx`: display de horas en tarjetas "0.5h/2h"
+      - `RequestDetailModal.jsx`: panel de detalles
+      - `TimeTracker.jsx`: historial de sesiones
+
+- ✅ **Errores Críticos Resueltos:**
+  - **Error 1: Puerto 3001 en uso (múltiples veces)**
+    - Síntoma: `EADDRINUSE: address already in use :::3001`
+    - Causa: Proceso backend previo no terminado correctamente
+    - Solución sistemática:
+      1. `netstat -ano | findstr :3001` para encontrar PID
+      2. `taskkill //F //PID [número]` para matar proceso
+      3. Reiniciar backend con `npm run dev`
+    - Recurrió 3-4 veces durante la sesión
+
+  - **Error 2: prisma.timeEntry is undefined**
+    - Síntoma: `TypeError: Cannot read properties of undefined (reading 'timeEntry')`
+    - Causa: Cliente Prisma no regenerado o tsx watch usando cache viejo
+    - Intentos fallidos:
+      1. `npx prisma generate` (no suficiente)
+      2. Restart del backend (tsx watch mantenía cache)
+    - Solución final:
+      1. Matar TODOS los procesos Node en puerto 3001
+      2. `rm -rf node_modules/.prisma` (limpiar cache)
+      3. `npx prisma generate`
+      4. Restart completo del backend (no hot-reload)
+    - Verificación: `node -e "const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); console.log('timeEntry' in prisma)"`
+
+  - **Error 3: Import/Export mismatch de Prisma**
+    - Síntoma: `prisma.timeEntry` undefined después de regenerar
+    - Causa: `database.ts` usa `export default prisma` pero service usaba `import { prisma }`
+    - Solución:
+      ```typescript
+      // Cambio de:
+      import { prisma } from '../../config/database';
+
+      // A:
+      import prisma from '../../config/database';
+      ```
+    - Archivo: `backend/src/modules/time-entries/time-entries.service.ts`
+
+  - **Error 4: userId undefined al crear time entries**
+    - Síntoma: Backend logs mostraban `userId: undefined`, fallo de validación Prisma
+    - Causa: Estructura de AuthRequest tiene `req.user.userId`, no `req.user.id`
+    - Middleware define:
+      ```typescript
+      export interface AuthRequest extends Request {
+        user?: {
+          userId: string;  // ← Campo correcto
+          email: string;
+          role: string;
+        };
+      }
+      ```
+    - Solución: Cambiar en 6 métodos del controller:
+      ```typescript
+      // De:
+      const userId = req.user!.id;
+
+      // A:
+      const userId = req.user!.userId;
+      ```
+    - Métodos corregidos: getActiveEntry, startTimeEntry, pauseTimeEntry, resumeTimeEntry, completeTimeEntry, deleteTimeEntry
+    - Archivo: `backend/src/modules/time-entries/time-entries.controller.ts`
+
+  - **Error 5: Formato de horas ilegible**
+    - Síntoma: Display mostraba "0.002540833333333333h" en tablas
+    - Causa: Horas almacenadas como decimales (0.0025 = 9 segundos)
+    - Usuario reportó: "asi veo la data, debemos colocar un formato mas legible los tiempos"
+    - Solución: Creación de `timeFormat.js` con funciones de formato
+    - Aplicado globalmente en todos los componentes que muestran horas
+
+- ✅ **Archivos Creados:**
+  - `backend/src/modules/time-entries/time-entries.service.ts` (NEW)
+  - `backend/src/modules/time-entries/time-entries.controller.ts` (NEW)
+  - `backend/src/modules/time-entries/time-entries.routes.ts` (NEW)
+  - `backend/src/modules/time-entries/time-entries.types.ts` (NEW)
+  - `frontend/src/services/timeEntryService.js` (NEW)
+  - `frontend/src/pages/request-management-center/components/TimeTracker.jsx` (NEW)
+  - `frontend/src/utils/timeFormat.js` (NEW)
+
+- ✅ **Archivos Modificados:**
+  - `backend/prisma/schema.prisma` (agregado modelo TimeEntry + enum TimeEntryStatus)
+  - `backend/src/modules/requests/requests.routes.ts` (integración de rutas de time entries)
+  - `frontend/src/pages/request-management-center/components/RequestDetailModal.jsx` (tab "Tiempo")
+  - `frontend/src/pages/request-management-center/components/RequestTable.jsx` (formato de horas)
+  - `frontend/src/pages/request-management-center/components/KanbanBoard.jsx` (formato de horas)
+  - `frontend/src/components/iconMap.js` (agregado ícono Pause)
+
+- ✅ **Características Técnicas:**
+  - **Trabajo multi-sesión:** Permite pausar trabajo, cerrar navegador, y reanudar después
+  - **Precisión de timer:** Cálculo en tiempo real con Date().getTime() evita desfase
+  - **Persistencia:** Todo almacenado en PostgreSQL, no se pierde al refrescar
+  - **Actualización automática:** actualHours del request siempre refleja suma de sesiones completadas
+  - **Validación robusta:** Zod schemas en backend previenen datos inválidos
+  - **UX fluida:** Timer actualizado cada segundo sin lag, transiciones suaves en botones
+
+- **Resultado:**
+  - ✅ Sistema de time tracking totalmente funcional y realista
+  - ✅ Usuarios pueden trabajar en solicitudes dividiendo tiempo en múltiples días
+  - ✅ Formato de horas legible y profesional en toda la aplicación
+  - ✅ Backend estable después de resolver problemas de Prisma y autenticación
+  - ✅ Código limpio y mantenible con separación de responsabilidades
+
+- ⏱️ Tiempo: ~5 horas (incluye debugging extensivo de Prisma y autenticación)
+
 ---
 
-**Última actualización:** 14 de Enero 2026 - 22:00
+**Última actualización:** 15 de Enero 2026 - 18:00
 **Desarrollado por:** Claude Code + Usuario

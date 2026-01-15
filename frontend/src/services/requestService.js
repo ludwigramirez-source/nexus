@@ -5,11 +5,37 @@ export const requestService = {
   async getAll(filters = {}) {
     const params = new URLSearchParams();
 
-    if (filters.status) params.append('status', filters.status);
-    if (filters.type) params.append('type', filters.type);
-    if (filters.priority) params.append('priority', filters.priority);
-    if (filters.product) params.append('product', filters.product);
-    if (filters.assignedTo) params.append('assignedTo', filters.assignedTo);
+    // Handle arrays - only send first value for now
+    // Backend expects single values, not arrays
+    if (filters.status && Array.isArray(filters.status) && filters.status.length > 0) {
+      params.append('status', filters.status[0]);
+    } else if (filters.status && !Array.isArray(filters.status)) {
+      params.append('status', filters.status);
+    }
+
+    if (filters.type && Array.isArray(filters.type) && filters.type.length > 0) {
+      params.append('type', filters.type[0]);
+    } else if (filters.type && !Array.isArray(filters.type)) {
+      params.append('type', filters.type);
+    }
+
+    if (filters.priority && Array.isArray(filters.priority) && filters.priority.length > 0) {
+      params.append('priority', filters.priority[0]);
+    } else if (filters.priority && !Array.isArray(filters.priority)) {
+      params.append('priority', filters.priority);
+    }
+
+    if (filters.product) params.append('productId', filters.product);
+    if (filters.assignee && Array.isArray(filters.assignee) && filters.assignee.length > 0) {
+      params.append('assignedTo', filters.assignee[0]);
+    } else if (filters.assignee && !Array.isArray(filters.assignee)) {
+      params.append('assignedTo', filters.assignee);
+    }
+    if (filters.client && Array.isArray(filters.client) && filters.client.length > 0) {
+      params.append('clientId', filters.client[0]);
+    } else if (filters.client && !Array.isArray(filters.client)) {
+      params.append('clientId', filters.client);
+    }
     if (filters.search) params.append('search', filters.search);
     if (filters.page) params.append('page', filters.page);
     if (filters.limit) params.append('limit', filters.limit);

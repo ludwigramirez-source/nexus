@@ -36,6 +36,7 @@ model User {
   sessions          Session[]
   activityLogs      ActivityLog[]
   createdQuotations Quotation[]
+  timeEntries       TimeEntry[]
 
   @@map("users")
 }
@@ -74,6 +75,7 @@ enum UserStatus {
 
 model Request {
   id              String        @id @default(cuid())
+  requestNumber   String        @unique @map("request_number")
   title           String
   description     String        @db.Text
   type            RequestType
@@ -102,6 +104,7 @@ model Request {
   comments      Comment[]
   assignments   Assignment[]
   roadmapLinks  RoadmapRequest[]
+  timeEntries   TimeEntry[]
 
   @@index([status])
   @@index([type])
@@ -192,6 +195,38 @@ model Comment {
 
   @@index([requestId])
   @@map("comments")
+}
+
+// ============================================
+// TIME TRACKING
+// ============================================
+
+model TimeEntry {
+  id          String         @id @default(cuid())
+  requestId   String         @map("request_id")
+  userId      String         @map("user_id")
+  startedAt   DateTime       @map("started_at")
+  pausedAt    DateTime?      @map("paused_at")
+  endedAt     DateTime?      @map("ended_at")
+  duration    Float          @default(0) // Duration in hours
+  status      TimeEntryStatus @default(ACTIVE)
+  description String?        @db.Text
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([requestId])
+  @@index([userId])
+  @@index([status])
+  @@map("time_entries")
+}
+
+enum TimeEntryStatus {
+  ACTIVE    // Timer is running
+  PAUSED    // Timer is paused
+  COMPLETED // Session is finished
 }
 
 // ============================================

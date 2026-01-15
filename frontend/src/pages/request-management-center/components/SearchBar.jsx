@@ -3,17 +3,9 @@ import Icon from '../../../components/AppIcon';
 import Input from '../../../components/ui/Input';
 import Select from '../../../components/ui/Select';
 
-const SearchBar = ({ onSearch, onDateRangeChange, onSavedFilterSelect }) => {
+const SearchBar = ({ onSearch, onDateRangeChange }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
-
-  const savedFilterOptions = [
-    { value: 'my_tasks', label: 'Mis Tareas' },
-    { value: 'urgent', label: 'Urgentes' },
-    { value: 'unassigned', label: 'Sin Asignar' },
-    { value: 'overdue', label: 'Atrasadas' },
-    { value: 'this_week', label: 'Esta Semana' }
-  ];
 
   const handleSearchChange = (e) => {
     const value = e?.target?.value;
@@ -47,28 +39,19 @@ const SearchBar = ({ onSearch, onDateRangeChange, onSavedFilterSelect }) => {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-3 w-full lg:w-auto">
-          <div className="flex items-center space-x-2 w-full sm:w-auto">
-            <Input
-              type="date"
-              value={dateRange?.start}
-              onChange={(e) => handleDateChange('start', e?.target?.value)}
-              className="w-full sm:w-40"
-            />
-            <span className="text-sm font-caption text-muted-foreground">-</span>
-            <Input
-              type="date"
-              value={dateRange?.end}
-              onChange={(e) => handleDateChange('end', e?.target?.value)}
-              className="w-full sm:w-40"
-            />
-          </div>
-
-          <Select
-            placeholder="Filtros guardados"
-            options={savedFilterOptions}
-            onChange={onSavedFilterSelect}
-            className="w-full sm:w-48"
+        <div className="flex items-center space-x-2 w-full lg:w-auto">
+          <Input
+            type="date"
+            value={dateRange?.start}
+            onChange={(e) => handleDateChange('start', e?.target?.value)}
+            className="w-full sm:w-40"
+          />
+          <span className="text-sm font-caption text-muted-foreground">-</span>
+          <Input
+            type="date"
+            value={dateRange?.end}
+            onChange={(e) => handleDateChange('end', e?.target?.value)}
+            className="w-full sm:w-40"
           />
         </div>
       </div>

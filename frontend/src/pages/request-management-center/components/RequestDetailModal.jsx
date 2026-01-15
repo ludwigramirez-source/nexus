@@ -4,8 +4,10 @@ import Image from '../../../components/AppImage';
 
 import CommentSection from './CommentSection';
 import ActivityFeed from './ActivityFeed';
+import TimeTracker from './TimeTracker';
 import { commentService } from '../../../services/commentService';
 import { activityService } from '../../../services/activityService';
+import { formatHoursCompact } from '../../../utils/timeFormat';
 
 const RequestDetailModal = ({ request, onClose, teamMembers = [], currentUser }) => {
   const [activeTab, setActiveTab] = useState('comments');
@@ -16,37 +18,33 @@ const RequestDetailModal = ({ request, onClose, teamMembers = [], currentUser })
   useEffect(() => {
     if (request?.id) {
       loadData();
-      
-      const unsubscribeComments = commentService?.subscribeToComments(
-        request?.id,
-        (newComment) => {
-          setComments(prev => [...prev, newComment]);
-        }
-      );
-
-      const unsubscribeActivities = activityService?.subscribeToActivities(
-        request?.id,
-        (newActivity) => {
-          setActivities(prev => [newActivity, ...prev]);
-        }
-      );
-
-      return () => {
-        unsubscribeComments();
-        unsubscribeActivities();
-      };
     }
   }, [request?.id]);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [commentsData, activitiesData] = await Promise.all([
-        commentService?.getCommentsByRequestId(request?.id),
-        activityService?.getActivitiesByRequestId(request?.id)
-      ]);
-      setComments(commentsData);
-      setActivities(activitiesData);
+
+      // Load comments and activities independently to avoid one failing blocking the other
+      let commentsData = [];
+      let activitiesData = [];
+
+      try {
+        commentsData = await commentService?.getCommentsByRequestId(request?.id);
+      } catch (error) {
+        console.error('Error loading comments:', error);
+        // Continue even if comments fail to load
+      }
+
+      try {
+        activitiesData = await activityService?.getActivitiesByRequestId(request?.id);
+      } catch (error) {
+        console.error('Error loading activities:', error);
+        // Continue even if activities fail to load
+      }
+
+      setComments(commentsData || []);
+      setActivities(activitiesData || []);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -56,36 +54,26 @@ const RequestDetailModal = ({ request, onClose, teamMembers = [], currentUser })
 
   const handleAddComment = async (commentData) => {
     try {
-      await commentService?.createComment(
+      const newComment = await commentService?.createComment(
         request?.id,
-        currentUser?.id,
-        commentData?.content,
-        commentData?.mentions
+        commentData?.content
       );
 
-      if (commentData?.mentions?.length > 0) {
-        await activityService?.createActivity(
-          request?.id,
-          currentUser?.id,
-          'mention',
-          `${currentUser?.name} mencionó a ${commentData?.mentions?.length} miembro(s) del equipo`,
-          { mentions: commentData?.mentions }
-        );
+      // Add the new comment to the list
+      if (newComment) {
+        setComments(prev => [...prev, newComment]);
       }
 
-      await activityService?.createActivity(
-        request?.id,
-        currentUser?.id,
-        'comment',
-        `${currentUser?.name} agregó un comentario`,
-        {}
-      );
+      // Reload data to get the latest comments and activities
+      await loadData();
     } catch (error) {
       console.error('Error adding comment:', error);
+      alert('Error al agregar comentario. Por favor intenta de nuevo.');
     }
   };
 
   const getTypeColor = (type) => {
+    const typeKey = type?.toLowerCase();
     const colors = {
       product_feature: 'bg-success/10 text-success border-success/20',
       customization: 'bg-accent/10 text-accent border-accent/20',
@@ -93,10 +81,11 @@ const RequestDetailModal = ({ request, onClose, teamMembers = [], currentUser })
       support: 'bg-primary/10 text-primary border-primary/20',
       infrastructure: 'bg-secondary/10 text-secondary border-secondary/20'
     };
-    return colors?.[type] || colors?.support;
+    return colors?.[typeKey] || colors?.support;
   };
 
   const getTypeLabel = (type) => {
+    const typeKey = type?.toLowerCase();
     const labels = {
       product_feature: 'Producto',
       customization: 'Personalización',
@@ -104,37 +93,44 @@ const RequestDetailModal = ({ request, onClose, teamMembers = [], currentUser })
       support: 'Soporte',
       infrastructure: 'Infraestructura'
     };
-    return labels?.[type] || type;
+    return labels?.[typeKey] || type;
   };
 
   const getStatusColor = (status) => {
+    const statusKey = status?.toLowerCase();
     const colors = {
-      pending: 'bg-muted text-muted-foreground',
+      intake: 'bg-secondary/10 text-secondary border-secondary/20',
+      backlog: 'bg-muted text-muted-foreground',
       in_progress: 'bg-primary/10 text-primary',
       review: 'bg-accent/10 text-accent',
-      completed: 'bg-success/10 text-success'
+      done: 'bg-success/10 text-success',
+      rejected: 'bg-error/10 text-error'
     };
-    return colors?.[status] || colors?.pending;
+    return colors?.[statusKey] || colors?.backlog;
   };
 
   const getStatusLabel = (status) => {
+    const statusKey = status?.toLowerCase();
     const labels = {
-      pending: 'Pendiente',
+      intake: 'Intake',
+      backlog: 'Backlog',
       in_progress: 'En Progreso',
       review: 'En Revisión',
-      completed: 'Completado'
+      done: 'Completado',
+      rejected: 'Rechazado'
     };
-    return labels?.[status] || status;
+    return labels?.[statusKey] || status;
   };
 
   const getPriorityIcon = (priority) => {
+    const priorityKey = priority?.toLowerCase();
     const icons = {
       critical: { name: 'AlertCircle', color: 'text-error' },
       high: { name: 'ArrowUp', color: 'text-warning' },
       medium: { name: 'Minus', color: 'text-accent' },
       low: { name: 'ArrowDown', color: 'text-muted-foreground' }
     };
-    return icons?.[priority] || icons?.medium;
+    return icons?.[priorityKey] || icons?.medium;
   };
 
   return (
@@ -144,7 +140,7 @@ const RequestDetailModal = ({ request, onClose, teamMembers = [], currentUser })
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-2">
               <h2 className="text-xl font-heading font-semibold text-foreground">
-                #{request?.id} - {request?.title}
+                {request?.requestNumber || `#${request?.id?.substring(0, 8)}`} - {request?.title}
               </h2>
               <span className={`inline-flex px-2 py-1 text-xs font-caption font-medium rounded-md border ${getTypeColor(request?.type)}`}>
                 {getTypeLabel(request?.type)}
@@ -213,7 +209,7 @@ const RequestDetailModal = ({ request, onClose, teamMembers = [], currentUser })
                     Cliente
                   </label>
                   <span className="text-sm font-caption text-foreground">
-                    {request?.client}
+                    {request?.client?.name || '-'}
                   </span>
                 </div>
                 <div>
@@ -221,7 +217,7 @@ const RequestDetailModal = ({ request, onClose, teamMembers = [], currentUser })
                     Horas Estimadas
                   </label>
                   <span className="text-sm font-caption text-foreground">
-                    {request?.estimatedHours}h
+                    {formatHoursCompact(request?.estimatedHours)}
                   </span>
                 </div>
                 <div>
@@ -229,7 +225,7 @@ const RequestDetailModal = ({ request, onClose, teamMembers = [], currentUser })
                     Horas Reales
                   </label>
                   <span className="text-sm font-caption text-foreground">
-                    {request?.actualHours}h
+                    {formatHoursCompact(request?.actualHours || 0)}
                   </span>
                 </div>
               </div>
@@ -270,6 +266,17 @@ const RequestDetailModal = ({ request, onClose, teamMembers = [], currentUser })
                   )}
                 </div>
               </button>
+              <button
+                onClick={() => setActiveTab('time')}
+                className={`flex-1 px-4 py-3 text-sm font-caption font-medium transition-smooth ${
+                  activeTab === 'time' ?'text-primary border-b-2 border-primary' :'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <Icon name="Clock" size={16} />
+                  <span>Tiempo</span>
+                </div>
+              </button>
             </div>
 
             <div className="flex-1 overflow-hidden">
@@ -285,9 +292,19 @@ const RequestDetailModal = ({ request, onClose, teamMembers = [], currentUser })
                   teamMembers={teamMembers}
                   currentUser={currentUser}
                 />
-              ) : (
+              ) : activeTab === 'activity' ? (
                 <ActivityFeed activities={activities} />
-              )}
+              ) : activeTab === 'time' ? (
+                <div className="p-4 overflow-y-auto h-full">
+                  <TimeTracker
+                    requestId={request?.id}
+                    onTimeUpdated={() => {
+                      // Callback to refresh request data when time is updated
+                      // This could trigger a refresh of the parent component
+                    }}
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

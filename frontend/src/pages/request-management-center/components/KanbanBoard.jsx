@@ -1,19 +1,22 @@
 import React, { useState } from 'react';
 import Icon from '../../../components/AppIcon';
 import Image from '../../../components/AppImage';
+import { formatHoursCompact } from '../../../utils/timeFormat';
 
 const KanbanBoard = ({ requests, onRequestMove, onRequestClick }) => {
   const [draggedRequest, setDraggedRequest] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
 
   const columns = [
-    { id: 'pending', title: 'Pendiente', color: 'border-muted' },
-    { id: 'in_progress', title: 'En Progreso', color: 'border-primary' },
-    { id: 'review', title: 'En Revisión', color: 'border-accent' },
-    { id: 'completed', title: 'Completado', color: 'border-success' }
+    { id: 'INTAKE', title: 'Intake', color: 'border-secondary' },
+    { id: 'BACKLOG', title: 'Backlog', color: 'border-muted' },
+    { id: 'IN_PROGRESS', title: 'En Progreso', color: 'border-primary' },
+    { id: 'REVIEW', title: 'En Revisión', color: 'border-accent' },
+    { id: 'DONE', title: 'Completado', color: 'border-success' }
   ];
 
   const getTypeColor = (type) => {
+    const typeKey = type?.toLowerCase();
     const colors = {
       product_feature: 'bg-success/10 text-success',
       customization: 'bg-accent/10 text-accent',
@@ -21,10 +24,11 @@ const KanbanBoard = ({ requests, onRequestMove, onRequestClick }) => {
       support: 'bg-primary/10 text-primary',
       infrastructure: 'bg-secondary/10 text-secondary'
     };
-    return colors?.[type] || colors?.support;
+    return colors?.[typeKey] || colors?.support;
   };
 
   const getTypeLabel = (type) => {
+    const typeKey = type?.toLowerCase();
     const labels = {
       product_feature: 'Producto',
       customization: 'Personalización',
@@ -32,17 +36,18 @@ const KanbanBoard = ({ requests, onRequestMove, onRequestClick }) => {
       support: 'Soporte',
       infrastructure: 'Infraestructura'
     };
-    return labels?.[type] || type;
+    return labels?.[typeKey] || type;
   };
 
   const getPriorityIcon = (priority) => {
+    const priorityKey = priority?.toLowerCase();
     const icons = {
       critical: { name: 'AlertCircle', color: 'text-error' },
       high: { name: 'ArrowUp', color: 'text-warning' },
       medium: { name: 'Minus', color: 'text-accent' },
       low: { name: 'ArrowDown', color: 'text-muted-foreground' }
     };
-    return icons?.[priority] || icons?.medium;
+    return icons?.[priorityKey] || icons?.medium;
   };
 
   const getRequestsByStatus = (status) => {
@@ -140,10 +145,11 @@ const KanbanBoard = ({ requests, onRequestMove, onRequestClick }) => {
                     draggable
                     onDragStart={(e) => handleDragStart(e, request)}
                     onDragEnd={handleDragEnd}
+                    onClick={() => onRequestClick && onRequestClick(request?.id)}
                   >
                     <div className="flex items-start justify-between mb-2 md:mb-3">
                       <span className="text-xs font-caption font-medium text-muted-foreground data-text">
-                        #{request?.id}
+                        {request?.requestNumber || `#${request?.id?.substring(0, 8)}`}
                       </span>
                       <Icon
                         name={getPriorityIcon(request?.priority)?.name}
@@ -165,21 +171,31 @@ const KanbanBoard = ({ requests, onRequestMove, onRequestClick }) => {
                         {getTypeLabel(request?.type)}
                       </span>
                       <span className="text-xs font-caption text-muted-foreground">
-                        {request?.client}
+                        {request?.client?.name || request?.clientName || '-'}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between pt-3 border-t border-border">
-                      {request?.assignee ? (
-                        <div className="flex items-center space-x-2">
-                          <Image
-                            src={request?.assignee?.avatar}
-                            alt={request?.assignee?.avatarAlt}
-                            className="w-6 h-6 rounded-full object-cover"
-                          />
-                          <span className="text-xs font-caption text-foreground">
-                            {request?.assignee?.name}
-                          </span>
+                      {request?.assignedUsers && request?.assignedUsers?.length > 0 ? (
+                        <div className="flex items-center -space-x-2">
+                          {request?.assignedUsers?.slice(0, 2)?.map((user) => (
+                            <div
+                              key={user?.id}
+                              className="w-6 h-6 rounded-full border-2 border-card bg-muted flex items-center justify-center"
+                              title={user?.name}
+                            >
+                              <span className="text-xs font-medium text-foreground">
+                                {user?.name?.charAt(0)?.toUpperCase()}
+                              </span>
+                            </div>
+                          ))}
+                          {request?.assignedUsers?.length > 2 && (
+                            <div className="w-6 h-6 rounded-full border-2 border-card bg-muted flex items-center justify-center">
+                              <span className="text-xs font-medium text-foreground">
+                                +{request?.assignedUsers?.length - 2}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <span className="text-xs font-caption text-muted-foreground">Sin asignar</span>
@@ -187,7 +203,7 @@ const KanbanBoard = ({ requests, onRequestMove, onRequestClick }) => {
                       <div className="flex items-center space-x-2">
                         <Icon name="Clock" size={14} className="text-muted-foreground" />
                         <span className="text-xs font-caption text-foreground data-text">
-                          {request?.actualHours}/{request?.estimatedHours}h
+                          {formatHoursCompact(request?.actualHours || 0)}/{formatHoursCompact(request?.estimatedHours)}
                         </span>
                       </div>
                     </div>

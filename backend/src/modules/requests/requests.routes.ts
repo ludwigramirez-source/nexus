@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { RequestsController } from './requests.controller';
 import { authenticate } from '../../middlewares/auth.middleware';
+import { TimeEntriesController } from '../time-entries/time-entries.controller';
 
 const router = Router();
 
@@ -83,5 +84,54 @@ router.get('/:id/comments', RequestsController.getComments);
  * @access  Private
  */
 router.post('/:id/comments', RequestsController.createComment);
+
+/**
+ * @route   GET /api/requests/:requestId/time-entries
+ * @desc    Get all time entries for a request
+ * @access  Private
+ */
+router.get('/:requestId/time-entries', TimeEntriesController.getTimeEntries);
+
+/**
+ * @route   GET /api/requests/:requestId/time-entries/active
+ * @desc    Get active time entry for current user
+ * @access  Private
+ */
+router.get('/:requestId/time-entries/active', TimeEntriesController.getActiveEntry);
+
+/**
+ * @route   POST /api/requests/:requestId/time-entries/start
+ * @desc    Start a new time entry
+ * @access  Private
+ */
+router.post('/:requestId/time-entries/start', TimeEntriesController.startTimeEntry);
+
+/**
+ * @route   PUT /api/requests/:requestId/time-entries/pause
+ * @desc    Pause active time entry
+ * @access  Private
+ */
+router.put('/:requestId/time-entries/pause', TimeEntriesController.pauseTimeEntry);
+
+/**
+ * @route   PUT /api/requests/:requestId/time-entries/resume
+ * @desc    Resume paused time entry
+ * @access  Private
+ */
+router.put('/:requestId/time-entries/resume', TimeEntriesController.resumeTimeEntry);
+
+/**
+ * @route   PUT /api/requests/:requestId/time-entries/complete
+ * @desc    Complete active time entry
+ * @access  Private
+ */
+router.put('/:requestId/time-entries/complete', TimeEntriesController.completeTimeEntry);
+
+/**
+ * @route   DELETE /api/requests/:requestId/time-entries/:timeEntryId
+ * @desc    Delete a time entry
+ * @access  Private
+ */
+router.delete('/:requestId/time-entries/:timeEntryId', TimeEntriesController.deleteTimeEntry);
 
 export default router;

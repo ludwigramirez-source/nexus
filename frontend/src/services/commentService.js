@@ -11,12 +11,16 @@ export const commentService = {
     }
   },
 
-  async createComment(requestId, content, parentId = null) {
+  async createComment(requestId, content, parentId) {
     try {
-      const { data } = await api.post(`/requests/${requestId}/comments`, {
-        content,
-        parentId
-      });
+      const payload = { content };
+
+      // Only include parentId if it's actually provided
+      if (parentId) {
+        payload.parentId = parentId;
+      }
+
+      const { data } = await api.post(`/requests/${requestId}/comments`, payload);
       return data.data;
     } catch (error) {
       console.error('Error creating comment:', error);

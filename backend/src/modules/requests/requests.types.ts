@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RequestType, RequestStatus, RequestPriority, ProductName } from '@prisma/client';
+import { RequestType, RequestStatus, Priority, ProductName } from '@prisma/client';
 
 // ============================================================================
 // Validation Schemas
@@ -9,23 +9,23 @@ export const createRequestSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters').max(200, 'Title must be at most 200 characters'),
   description: z.string().min(10, 'Description must be at least 10 characters'),
   type: z.nativeEnum(RequestType),
-  priority: z.nativeEnum(RequestPriority),
+  priority: z.nativeEnum(Priority),
   estimatedHours: z.number().positive('Estimated hours must be positive'),
   productId: z.string().cuid().optional(),
-  clientId: z.string().uuid().optional(),
+  clientId: z.string().cuid().optional(),
   tags: z.array(z.string()).optional(),
-  assignedUserIds: z.array(z.string().uuid()).optional(),
+  assignedUserIds: z.array(z.string().cuid()).optional(),
 });
 
 export const updateRequestSchema = z.object({
   title: z.string().min(3).max(200).optional(),
   description: z.string().min(10).optional(),
   type: z.nativeEnum(RequestType).optional(),
-  priority: z.nativeEnum(RequestPriority).optional(),
+  priority: z.nativeEnum(Priority).optional(),
   estimatedHours: z.number().positive().optional(),
   actualHours: z.number().nonnegative().optional(),
   productId: z.string().cuid().optional(),
-  clientId: z.string().uuid().optional(),
+  clientId: z.string().cuid().optional(),
   tags: z.array(z.string()).optional(),
 });
 
@@ -35,7 +35,7 @@ export const changeStatusSchema = z.object({
 });
 
 export const assignUsersSchema = z.object({
-  userIds: z.array(z.string().uuid()).min(1, 'At least one user must be assigned'),
+  userIds: z.array(z.string().cuid()).min(1, 'At least one user must be assigned'),
 });
 
 export const createActivitySchema = z.object({
@@ -46,16 +46,16 @@ export const createActivitySchema = z.object({
 
 export const createCommentSchema = z.object({
   content: z.string().min(1, 'Comment content is required'),
-  parentId: z.string().uuid().optional(),
+  parentId: z.string().cuid().nullish(), // Accepts null, undefined, or string
 });
 
 export const requestFiltersSchema = z.object({
   status: z.nativeEnum(RequestStatus).optional(),
   type: z.nativeEnum(RequestType).optional(),
-  priority: z.nativeEnum(RequestPriority).optional(),
+  priority: z.nativeEnum(Priority).optional(),
   productId: z.string().cuid().optional(),
-  assignedTo: z.string().uuid().optional(),
-  clientId: z.string().uuid().optional(),
+  assignedTo: z.string().cuid().optional(),
+  clientId: z.string().cuid().optional(),
   search: z.string().optional(),
   dateFrom: z.string().datetime().optional(),
   dateTo: z.string().datetime().optional(),
@@ -73,7 +73,7 @@ export interface CreateRequestDTO {
   title: string;
   description: string;
   type: RequestType;
-  priority: RequestPriority;
+  priority: Priority;
   estimatedHours: number;
   productId?: string;
   clientId?: string;
@@ -85,7 +85,7 @@ export interface UpdateRequestDTO {
   title?: string;
   description?: string;
   type?: RequestType;
-  priority?: RequestPriority;
+  priority?: Priority;
   estimatedHours?: number;
   actualHours?: number;
   productId?: string;
@@ -116,7 +116,7 @@ export interface CreateCommentDTO {
 export interface RequestFilters {
   status?: RequestStatus;
   type?: RequestType;
-  priority?: RequestPriority;
+  priority?: Priority;
   productId?: string;
   assignedTo?: string;
   clientId?: string;
@@ -135,11 +135,12 @@ export interface RequestFilters {
 
 export interface RequestResponse {
   id: string;
+  requestNumber: string;
   title: string;
   description: string;
   type: RequestType;
   status: RequestStatus;
-  priority: RequestPriority;
+  priority: Priority;
   estimatedHours: number;
   actualHours: number | null;
   productId: string | null;

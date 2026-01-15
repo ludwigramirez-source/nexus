@@ -2,59 +2,65 @@ import React from 'react';
 import Icon from '../../../components/AppIcon';
 import { Checkbox } from '../../../components/ui/Checkbox';
 
-const FilterSidebar = ({ filters, onFilterChange, onClearFilters }) => {
+const FilterSidebar = ({ filters, onFilterChange, onClearFilters, requests = [], users = [], clients = [] }) => {
+  // Calcular counts dinámicamente
+  const getCountForType = (type) => {
+    return requests.filter(r => r.type === type).length;
+  };
+
+  const getCountForStatus = (status) => {
+    return requests.filter(r => r.status === status).length;
+  };
+
+  const getCountForPriority = (priority) => {
+    return requests.filter(r => r.priority === priority).length;
+  };
+
+  const getCountForUser = (userId) => {
+    if (userId === 'unassigned') {
+      return requests.filter(r => !r.assignedUsers || r.assignedUsers.length === 0).length;
+    }
+    return requests.filter(r =>
+      r.assignedUsers && r.assignedUsers.some(u => u.id === userId)
+    ).length;
+  };
+
+  const getCountForClient = (clientId) => {
+    return requests.filter(r => r.clientId === clientId || r.client?.id === clientId).length;
+  };
+
   const filterSections = [
     {
       title: 'Tipo de Solicitud',
       key: 'type',
       options: [
-        { value: 'product_feature', label: 'Característica de Producto', count: 12 },
-        { value: 'customization', label: 'Personalización', count: 8 },
-        { value: 'bug', label: 'Error', count: 5 },
-        { value: 'support', label: 'Soporte', count: 3 },
-        { value: 'infrastructure', label: 'Infraestructura', count: 2 }
+        { value: 'PRODUCT_FEATURE', label: 'Característica de Producto', count: getCountForType('PRODUCT_FEATURE') },
+        { value: 'CUSTOMIZATION', label: 'Personalización', count: getCountForType('CUSTOMIZATION') },
+        { value: 'BUG', label: 'Error', count: getCountForType('BUG') },
+        { value: 'SUPPORT', label: 'Soporte', count: getCountForType('SUPPORT') },
+        { value: 'INFRASTRUCTURE', label: 'Infraestructura', count: getCountForType('INFRASTRUCTURE') }
       ]
     },
     {
       title: 'Estado',
       key: 'status',
       options: [
-        { value: 'pending', label: 'Pendiente', count: 7 },
-        { value: 'in_progress', label: 'En Progreso', count: 15 },
-        { value: 'review', label: 'En Revisión', count: 4 },
-        { value: 'completed', label: 'Completado', count: 4 }
+        { value: 'INTAKE', label: 'Intake', count: getCountForStatus('INTAKE') },
+        { value: 'BACKLOG', label: 'Backlog', count: getCountForStatus('BACKLOG') },
+        { value: 'IN_PROGRESS', label: 'En Progreso', count: getCountForStatus('IN_PROGRESS') },
+        { value: 'REVIEW', label: 'En Revisión', count: getCountForStatus('REVIEW') },
+        { value: 'DONE', label: 'Completado', count: getCountForStatus('DONE') },
+        { value: 'REJECTED', label: 'Rechazado', count: getCountForStatus('REJECTED') }
       ]
     },
     {
       title: 'Prioridad',
       key: 'priority',
       options: [
-        { value: 'critical', label: 'Crítica', count: 3 },
-        { value: 'high', label: 'Alta', count: 8 },
-        { value: 'medium', label: 'Media', count: 12 },
-        { value: 'low', label: 'Baja', count: 7 }
-      ]
-    },
-    {
-      title: 'Miembro del Equipo',
-      key: 'assignee',
-      options: [
-        { value: 'ana', label: 'Ana García', count: 8 },
-        { value: 'mario', label: 'Mario López', count: 7 },
-        { value: 'laura', label: 'Laura Martínez', count: 6 },
-        { value: 'carlos', label: 'Carlos Rodríguez', count: 4 },
-        { value: 'unassigned', label: 'Sin Asignar', count: 5 }
-      ]
-    },
-    {
-      title: 'Cliente',
-      key: 'client',
-      options: [
-        { value: 'techmex', label: 'TechMex Solutions', count: 6 },
-        { value: 'innovatech', label: 'InnovaTech', count: 5 },
-        { value: 'dataflow', label: 'DataFlow Systems', count: 4 },
-        { value: 'cloudpro', label: 'CloudPro México', count: 3 },
-        { value: 'internal', label: 'Interno', count: 12 }
+        { value: 'CRITICAL', label: 'Crítica', count: getCountForPriority('CRITICAL') },
+        { value: 'HIGH', label: 'Alta', count: getCountForPriority('HIGH') },
+        { value: 'MEDIUM', label: 'Media', count: getCountForPriority('MEDIUM') },
+        { value: 'LOW', label: 'Baja', count: getCountForPriority('LOW') }
       ]
     }
   ];
