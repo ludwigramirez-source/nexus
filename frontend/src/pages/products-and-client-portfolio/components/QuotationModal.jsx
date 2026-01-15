@@ -91,7 +91,7 @@ const QuotationModal = ({
       }
       setErrors({});
     }
-  }, [isOpen, quotation]);
+  }, [isOpen, quotation?.id]); // Changed: only re-run when modal opens or quotation ID changes
 
   // Client options
   const clientOptions = useMemo(() => {
