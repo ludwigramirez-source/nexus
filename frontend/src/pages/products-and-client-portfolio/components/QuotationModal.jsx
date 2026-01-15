@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Select from '../../../components/ui/Select';
 import Input from '../../../components/ui/Input';
 import Button from '../../../components/ui/Button';
@@ -139,6 +139,11 @@ const QuotationModal = ({
     };
   }, [formData.items, products]);
 
+  // Handle client change
+  const handleClientChange = useCallback((val) => {
+    setFormData(prevData => ({ ...prevData, clientId: val }));
+  }, []);
+
   // Add item
   const handleAddItem = () => {
     setFormData({
@@ -274,7 +279,7 @@ const QuotationModal = ({
                 label="Cliente"
                 options={clientOptions}
                 value={formData.clientId}
-                onChange={(val) => setFormData({ ...formData, clientId: val })}
+                onChange={handleClientChange}
                 placeholder="Seleccionar cliente"
                 error={errors.clientId}
                 required

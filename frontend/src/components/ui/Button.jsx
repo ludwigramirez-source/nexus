@@ -47,6 +47,7 @@ const Button = React.forwardRef(({
     iconSize = null,
     fullWidth = false,
     disabled = false,
+    type = 'button', // Default to button type to prevent form submission
     ...props
 }, ref) => {
     const Comp = asChild ? Slot : "button";
@@ -97,6 +98,7 @@ const Button = React.forwardRef(({
             )}
             ref={ref}
             disabled={disabled || loading}
+            type={type}
             {...props}
         >
             {loading && <LoadingSpinner />}
@@ -151,6 +153,7 @@ const Button = React.forwardRef(({
             )}
             ref={ref}
             disabled={disabled || loading}
+            type={type}
             {...props}
         >
             {loading && <LoadingSpinner />}
