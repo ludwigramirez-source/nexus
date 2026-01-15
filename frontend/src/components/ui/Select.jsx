@@ -59,7 +59,6 @@ const Select = React.forwardRef(({
         // Stop event propagation to prevent triggering parent handlers
         if (e) {
             e.stopPropagation();
-            e.preventDefault();
         }
 
         if (!disabled) {
@@ -73,10 +72,12 @@ const Select = React.forwardRef(({
     };
 
     const handleOptionSelect = (option, event) => {
-        // Stop event propagation to prevent triggering parent handlers
+        console.log('🟢 [Select.handleOptionSelect] Opción seleccionada:', option?.value);
+
+        // Stop event propagation to prevent triggering parent handlers (like form submissions)
         if (event) {
+            console.log('🟢 [Select.handleOptionSelect] Ejecutando stopPropagation');
             event.stopPropagation();
-            event.preventDefault();
         }
 
         if (multiple) {
@@ -84,8 +85,10 @@ const Select = React.forwardRef(({
             const updatedValue = newValue?.includes(option?.value)
                 ? newValue?.filter(v => v !== option?.value)
                 : [...newValue, option?.value];
+            console.log('🟢 [Select.handleOptionSelect] Llamando onChange (multiple):', updatedValue);
             onChange?.(updatedValue);
         } else {
+            console.log('🟢 [Select.handleOptionSelect] Llamando onChange (single):', option?.value);
             onChange?.(option?.value);
             setIsOpen(false);
             onOpenChange?.(false);
@@ -95,7 +98,6 @@ const Select = React.forwardRef(({
     const handleClear = (e) => {
         if (e) {
             e.stopPropagation();
-            e.preventDefault();
         }
         onChange?.(multiple ? [] : '');
     };

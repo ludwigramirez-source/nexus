@@ -141,7 +141,11 @@ const QuotationModal = ({
 
   // Handle client change
   const handleClientChange = useCallback((val) => {
-    setFormData(prevData => ({ ...prevData, clientId: val }));
+    console.log('🔵 [QuotationModal.handleClientChange] Recibido valor:', val);
+    setFormData(prevData => {
+      console.log('🔵 [QuotationModal.handleClientChange] Actualizando de', prevData.clientId, 'a', val);
+      return { ...prevData, clientId: val };
+    });
   }, []);
 
   // Add item
