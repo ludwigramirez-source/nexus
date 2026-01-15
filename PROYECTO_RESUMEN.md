@@ -1,4 +1,7 @@
 # IPTEGRA NEXUS - Resumen del Proyecto
+
+**Repositorio GitHub:** https://github.com/ludwigramirez-source/nexus.git
+
 **Fecha de última actualización:** 14 de Enero 2026
 **Estado:** ✅ Sistema de Roles + Activity Logs + Tema Dark/Light + Dashboard + UI/UX Unificada implementados
 
