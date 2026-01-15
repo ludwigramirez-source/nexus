@@ -55,7 +55,13 @@ const Select = React.forwardRef(({
         return selectedOption ? selectedOption?.label : placeholder;
     };
 
-    const handleToggle = () => {
+    const handleToggle = (e) => {
+        // Stop event propagation to prevent triggering parent handlers
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+
         if (!disabled) {
             const newIsOpen = !isOpen;
             setIsOpen(newIsOpen);
@@ -66,7 +72,13 @@ const Select = React.forwardRef(({
         }
     };
 
-    const handleOptionSelect = (option) => {
+    const handleOptionSelect = (option, event) => {
+        // Stop event propagation to prevent triggering parent handlers
+        if (event) {
+            event.stopPropagation();
+            event.preventDefault();
+        }
+
         if (multiple) {
             const newValue = value || [];
             const updatedValue = newValue?.includes(option?.value)
@@ -81,7 +93,10 @@ const Select = React.forwardRef(({
     };
 
     const handleClear = (e) => {
-        e?.stopPropagation();
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
         onChange?.(multiple ? [] : '');
     };
 
@@ -122,7 +137,7 @@ const Select = React.forwardRef(({
                         error && "border-destructive focus:ring-destructive",
                         !hasValue && "text-muted-foreground"
                     )}
-                    onClick={handleToggle}
+                    onClick={(e) => handleToggle(e)}
                     disabled={disabled}
                     aria-expanded={isOpen}
                     aria-haspopup="listbox"
@@ -202,7 +217,7 @@ const Select = React.forwardRef(({
                                             isSelected(option?.value) && "bg-primary text-primary-foreground",
                                             option?.disabled && "pointer-events-none opacity-50"
                                         )}
-                                        onClick={() => !option?.disabled && handleOptionSelect(option)}
+                                        onClick={(e) => !option?.disabled && handleOptionSelect(option, e)}
                                     >
                                         <span className="flex-1">{option?.label}</span>
                                         {multiple && isSelected(option?.value) && (
