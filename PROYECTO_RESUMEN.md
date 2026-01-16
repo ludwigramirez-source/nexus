@@ -1572,5 +1572,623 @@ npx prisma db seed
 
 ---
 
-**Última actualización:** 15 de Enero 2026 - 18:00
+### **Sesión 9 - 15/16 de Enero 2026**
+- ✅ **Sistema Completo de Planificación de Capacidad (Capacity Planning Workspace):**
+  - **Backend - Módulo de Assignments:**
+    - **Schema Prisma - Modelo Assignment:**
+      - Campos: id, requestId, userId, assignedDate, allocatedHours, actualHours, status, notes, weekStart
+      - Enum AssignmentStatus: PLANNED, IN_PROGRESS, COMPLETED, CANCELLED
+      - Relaciones con Request y User
+      - Índices para optimizar queries por requestId, userId, assignedDate, weekStart
+    - **assignments.service.ts:**
+      - **CRUD completo:**
+        - `create(data)`: Crear asignación con validación de capacidad diaria
+        - `createBulk(assignments[])`: Crear múltiples asignaciones en transacción
+        - `update(id, data)`: Actualizar asignación con revalidación de capacidad
+        - `delete(id)`: Eliminar asignación
+        - `getById(id)`: Obtener asignación por ID con relaciones
+        - `getAll(filters)`: Listar con paginación y filtros (userId, requestId, status, date)
+      - **Queries especializadas:**
+        - `getByDateRange(startDate, endDate)`: Obtener asignaciones de un rango de fechas
+        - `getByWeek(weekStart)`: Filtrar por semana específica
+        - `getByUser(userId)`: Todas las asignaciones de un usuario
+        - `getDailyCapacitySummary(date)`: Resumen de capacidad para una fecha específica
+        - `getCapacitySummary(weekStart)`: Resumen semanal por usuario (allocated, completed, utilization%)
+      - **Validación de Capacidad Diaria:**
+        - Capacidad diaria = `user.capacity / 5` (ej: 40h/semana ÷ 5 días = 8h/día)
+        - Verifica capacidad ANTES de crear asignación
+        - Suma todas las asignaciones existentes del día
+        - Error si `totalAllocated + newHours > dailyCapacity`
+        - Validación aplicada en: create(), createBulk(), update()
+      - **Normalización de fechas:**
+        - `assignedDate.setHours(0, 0, 0, 0)` para eliminar componente de tiempo
+        - Consistencia en todas las queries de fecha
+    - **assignments.controller.ts:**
+      - 9 endpoints HTTP con autenticación requerida
+      - Validación con Zod schemas
+      - Respuestas consistentes: `{ success, data, message, pagination? }`
+    - **assignments.routes.ts:**
+      - Integrado en `/api/assignments/*`
+      - GET `/` - Listar con filtros
+      - POST `/` - Crear asignación
+      - POST `/bulk` - Crear múltiples (distribución multi-día)
+      - GET `/:id` - Obtener por ID
+      - PUT `/:id` - Actualizar
+      - DELETE `/:id` - Eliminar
+      - GET `/date-range` - Por rango de fechas
+      - GET `/week/:weekStart` - Por semana
+      - GET `/user/:userId` - Por usuario
+      - GET `/capacity-summary` - Resumen semanal
+
+  - **Frontend - Componentes de Planificación:**
+    - **AssignmentDistributionModal.jsx (NUEVO - Componente crítico):**
+      - **Dos modos de distribución:**
+        - **Modo Rápido:** Distribuir horas automáticamente en 5 días laborales
+        - **Modo Avanzado:** Seleccionar días específicos y horas por día manualmente
+      - **Patrón crítico - Manejo de Timezone (aplicado en TODO el componente):**
+        ```javascript
+        // ❌ INCORRECTO (causa desfase de 1 día):
+        const date = new Date("2026-01-12"); // Interpreta como UTC midnight → día anterior en GMT-5
+
+        // ✅ CORRECTO (usado en todo el código):
+        const [year, month, day] = "2026-01-12".split('-').map(Number);
+        const localDate = new Date(year, month - 1, day); // Crea fecha local sin conversión
+        ```
+      - **Inicialización de días avanzados (advancedDays):**
+        ```javascript
+        // Parseo manual de initialDate
+        const [year, month, day] = initialDate.split('-').map(Number);
+        let currentDate = new Date(year, month - 1, day);
+
+        // Ajuste si es fin de semana
+        const dayOfWeek = currentDate.getDay();
+        if (dayOfWeek === 0) currentDate.setDate(currentDate.getDate() + 1); // Dom → Lun
+        else if (dayOfWeek === 6) currentDate.setDate(currentDate.getDate() + 2); // Sáb → Lun
+
+        // Generar array de 5 días laborales con formato manual
+        while (days.length < 5) {
+          if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
+            const yearStr = currentDate.getFullYear();
+            const monthStr = String(currentDate.getMonth() + 1).padStart(2, '0');
+            const dayStr = String(currentDate.getDate()).padStart(2, '0');
+            const dateStr = `${yearStr}-${monthStr}-${dayStr}`;
+            days.push({ date: dateStr, hours: 0, enabled: false });
+          }
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+        ```
+      - **Renderizado de fechas en JSX (sin timezone issues):**
+        ```javascript
+        // Parseo manual ANTES de formatear
+        const [year, month, dayNum] = day.date.split('-').map(Number);
+        const localDate = new Date(year, month - 1, dayNum);
+        const dayName = localDate.toLocaleDateString('es', { weekday: 'long' });
+        const dateFormatted = localDate.toLocaleDateString('es', {
+          day: '2-digit',
+          month: 'short'
+        });
+        ```
+      - **Creación de asignaciones para enviar al backend:**
+        ```javascript
+        // Usar mediodía LOCAL (no UTC) para evitar cambio de día
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const dateTime = new Date(year, month - 1, day, 12, 0, 0); // Local noon
+
+        return {
+          userId: user.id,
+          requestId: request.id,
+          assignedDate: dateTime.toISOString(), // Ahora sí convertir a ISO
+          allocatedHours: parseFloat(hours),
+          notes: ''
+        };
+        ```
+      - **Validaciones del modal:**
+        - Modo rápido: total debe ser ≤ estimatedHours
+        - Modo avanzado: al menos un día debe tener horas > 0
+        - Modo avanzado: suma de días no puede exceder estimatedHours
+        - Error visual con mensaje claro: `⚠️ El total de ${total}h excede las ${estimated}h estimadas`
+      - **Estados del componente:**
+        - mode: 'quick' | 'advanced'
+        - quickDays: número de días (1-5)
+        - quickHoursPerDay: horas por día (calculado automáticamente)
+        - advancedDays: array de { date, hours, enabled }
+        - errors: objeto con errores de validación por modo
+      - **Props:**
+        - request: objeto de la solicitud con estimatedHours
+        - user: miembro del equipo seleccionado
+        - initialDate: fecha donde se hizo el drop (formato YYYY-MM-DD)
+        - onConfirm: callback con array de asignaciones a crear
+        - onClose: callback para cerrar modal
+
+    - **WeeklyCalendarGrid.jsx (modificado):**
+      - Grid semanal de lunes a viernes
+      - Drag & drop para asignar tareas
+      - Muestra asignaciones existentes por día y usuario
+      - onDrop callback: `(request, memberId, dateStr)`
+      - Parseo correcto de fechas para mostrar asignaciones en día correcto
+
+    - **index.jsx (Capacity Planning Workspace - modificaciones críticas):**
+      - **Fix 1: Carga de datos con parseo correcto de fechas:**
+        ```javascript
+        const transformed = (assignmentsData.data || []).map(a => {
+          // Parsear fecha evitando timezone issues
+          const assignedDate = new Date(a.assignedDate);
+          const year = assignedDate.getFullYear();
+          const month = String(assignedDate.getMonth() + 1).padStart(2, '0');
+          const day = String(assignedDate.getDate()).padStart(2, '0');
+          const dateStr = `${year}-${month}-${day}`;
+
+          return {
+            id: a.id,
+            requestId: a.request.id,
+            requestTitle: a.request.title,
+            memberId: a.user.id,
+            date: dateStr, // Formato consistente YYYY-MM-DD
+            hours: a.allocatedHours,
+            // ... otros campos
+          };
+        });
+        ```
+      - **Fix 2: Cálculo correcto de requests sin asignar:**
+        ```javascript
+        // Calcular horas asignadas por request (suma de TODAS las asignaciones)
+        const assignedHoursByRequest = {};
+        transformed.forEach(assignment => {
+          if (!assignedHoursByRequest[assignment.requestId]) {
+            assignedHoursByRequest[assignment.requestId] = 0;
+          }
+          assignedHoursByRequest[assignment.requestId] += assignment.hours;
+        });
+
+        // Filtrar requests que NO están completamente asignados
+        const unassigned = planifiableRequests.filter(request => {
+          const assignedHours = assignedHoursByRequest[request.id] || 0;
+          return assignedHours < request.estimatedHours;
+        });
+        ```
+      - **Fix 3: Actualización correcta después de crear asignaciones:**
+        ```javascript
+        // Agregar nuevas asignaciones al estado
+        const updatedAssignments = [...assignments, ...newAssignments];
+        setAssignments(updatedAssignments);
+
+        // Recalcular TOTAL de horas para el request (incluyendo previas)
+        const totalAssignedForRequest = updatedAssignments
+          .filter(a => a.requestId === pendingAssignment.request.id)
+          .reduce((sum, a) => sum + a.hours, 0);
+
+        // Remover de unassigned solo si está completamente asignado
+        if (totalAssignedForRequest >= pendingAssignment.request.estimatedHours) {
+          setUnassignedRequests(
+            unassignedRequests.filter(r => r.id !== pendingAssignment.request.id)
+          );
+        }
+        ```
+      - **Estados:**
+        - weekStart: fecha de inicio de semana (lunes)
+        - unassignedRequests: solicitudes pendientes de asignación completa
+        - assignments: todas las asignaciones de la semana
+        - pendingAssignment: { request, member, date } para modal
+        - showDistributionModal: boolean
+
+    - **AssignmentDetailsModal.jsx (modificado):**
+      - **Detección de tareas fraccionadas:**
+        ```javascript
+        const relatedAssignments = allAssignments?.filter(a =>
+          a.requestId === assignment.requestId
+        ) || [];
+        const isFragmented = relatedAssignments.length > 1;
+        const totalAssignedHours = relatedAssignments.reduce((sum, a) =>
+          sum + a.hours, 0
+        );
+        ```
+      - **Warning badge para tareas fraccionadas:**
+        - Ícono AlertTriangle con fondo warning/10
+        - Muestra cantidad de asignaciones y total de horas
+        - Texto: "Esta tarea tiene X asignaciones distribuidas en diferentes días"
+      - **Confirmación antes de eliminar (solo si fraccionada):**
+        - Modal superpuesto con advertencia detallada
+        - Muestra cuántas horas quedarán después de eliminar esta asignación
+        - Botón "Eliminar de Todos Modos" (variant=danger)
+        - Informa que la tarea volverá a "Sin Asignar" si quedan horas pendientes
+      - **Campos editables:**
+        - Horas asignadas (Input type=number, min=0, max=24, step=0.5)
+        - Notas (textarea con placeholder)
+      - **Información mostrada:**
+        - Título del request, nombre del usuario, fecha
+        - Tipo de solicitud, prioridad
+        - Estimación original vs horas actuales
+        - Estado de la asignación
+
+- ✅ **Debugging Extensivo de Timezone:**
+  - **Problema 1: "Dom, 11 ene" aparecía en lugar de "Lun, 12 ene"**
+    - **User feedback:** "estas colocando como primer dia el domingo y el domingo es no laboral"
+    - **Causa:** `new Date("2026-01-12")` interpreta string como UTC midnight
+    - **En GMT-5:** UTC 2026-01-12 00:00 = Local 2026-01-11 19:00 (día anterior)
+    - **Fix:** Parseo manual en toda la inicialización de `advancedDays`
+
+  - **Problema 2: Modal mostraba fecha correcta internamente pero incorrecta en UI**
+    - **User feedback:** Logs mostraban "2026-01-13" pero UI mostraba "dom, 11 ene"
+    - **Causa:** JSX usaba `new Date(day.date).toLocaleDateString()` re-introduciendo el problema
+    - **Fix:** Parseo manual ANTES de cada `.toLocaleDateString()` en JSX
+
+  - **Problema 3: "Hago drag al miércoles y graba el martes"**
+    - **User feedback:** "hago el drag hacia el miercoles y graba la tarea el martes, todas las graba un dia antes"
+    - **Causa:** Uso de `Date.UTC(year, month, day)` al crear payload
+    - **Fix:** Usar `new Date(year, month - 1, day, 12, 0, 0)` (mediodía local)
+
+  - **Problema 4: Asignación aparecía en día correcto pero también en "Sin Asignar"**
+    - **User feedback:** "cuando hago el F5 una de las asignaciones que ya estaba no aparecio... y la del martes aparece en asignada y por asignar"
+    - **Causa 1:** Mismo issue de timezone en carga inicial de datos
+    - **Causa 2:** Lógica de filtrado no calculaba total de horas correctamente
+    - **Fix:** Aplicar parseo manual en transformación + cálculo correcto de totales
+
+  - **Resultado:** Patrón de parseo manual aplicado en 8 lugares diferentes del código
+
+- ✅ **Mejoras de UX:**
+  - **Mensajes de error claros:**
+    - "⚠️ El total de Xh excede las Yh estimadas para esta tarea"
+    - "Cannot allocate Xh. User has Yh available for [fecha]"
+  - **Warning de eliminación inteligente:**
+    - Solo aparece si la tarea está fraccionada (múltiples días)
+    - Muestra impacto de eliminar: "quedarán Xh asignadas en los otros días"
+  - **Validación en tiempo real:**
+    - Errores se muestran al cambiar valores
+    - Botón "Asignar" deshabilitado si hay errores
+  - **Estados visuales:**
+    - Request completamente asignado → desaparece de "Sin Asignar"
+    - Request parcialmente asignado → permanece en "Sin Asignar"
+    - Badge de warning amarillo para tareas fraccionadas
+
+- ✅ **Archivos Creados:**
+  - `frontend/src/pages/capacity-planning-workspace/components/AssignmentDistributionModal.jsx` (NEW - componente complejo, ~400 líneas)
+
+- ✅ **Archivos Modificados:**
+  - `backend/prisma/schema.prisma` (modelo Assignment)
+  - `backend/src/modules/assignments/assignments.service.ts` (lógica de negocio completa)
+  - `backend/src/modules/assignments/assignments.controller.ts` (9 endpoints)
+  - `backend/src/modules/assignments/assignments.routes.ts` (rutas)
+  - `backend/src/modules/assignments/assignments.types.ts` (tipos TypeScript)
+  - `frontend/src/pages/capacity-planning-workspace/index.jsx` (3 fixes críticos)
+  - `frontend/src/pages/capacity-planning-workspace/components/AssignmentDetailsModal.jsx` (warning de fragmentación)
+  - `frontend/src/pages/capacity-planning-workspace/components/WeeklyCalendarGrid.jsx` (parseo de fechas)
+  - `frontend/src/services/assignmentService.js` (cliente API)
+
+- ✅ **Patrón Técnico Documentado - Manejo de Fechas sin Timezone:**
+  - **Regla de oro:** NUNCA usar `new Date(stringISO)` directamente para fechas "date-only"
+  - **Patrón correcto:**
+    1. Parse manual: `const [y, m, d] = str.split('-').map(Number)`
+    2. Crear local: `new Date(y, m - 1, d)` o `new Date(y, m - 1, d, 12, 0, 0)`
+    3. Formatear: `toLocaleDateString()`, `toISOString()`, etc.
+  - **Aplicar en:**
+    - Inicialización de estado con fechas
+    - Renderizado de fechas en JSX
+    - Creación de payloads para backend
+    - Parseo de respuestas del backend
+  - **Evitar:**
+    - `new Date("YYYY-MM-DD")` sin parseo manual
+    - `Date.UTC()` para fechas locales
+    - `.toISOString().split('T')[0]` sin parseo previo
+
+- ✅ **Características del Sistema:**
+  - **Drag & Drop funcional:** Arrastrar request desde "Sin Asignar" a celda de calendario
+  - **Distribución flexible:** Quick (automática) o Advanced (manual por día)
+  - **Validación de capacidad:** Backend rechaza si se excede capacidad diaria (8h)
+  - **Tareas multi-día:** Una tarea puede fraccionarse en múltiples días
+  - **Tracking de progreso:** Request desaparece de "Sin Asignar" cuando está 100% asignado
+  - **Gestión de fragmentación:** Warnings claros al eliminar parte de tarea distribuida
+  - **Sincronización correcta:** F5 mantiene datos consistentes (assignments + unassigned)
+
+- ✅ **Proceso de Testing Iterativo (5 rondas de fixes):**
+  1. **Ronda 1:** Fix de inicialización de días (domingo → lunes)
+  2. **Ronda 2:** Fix de renderizado en JSX (display incorrecto)
+  3. **Ronda 3:** Fix de guardado (día anterior en BD)
+  4. **Ronda 4:** Fix de sincronización (duplicados después de F5)
+  5. **Ronda 5:** Fix de validaciones y warnings (UX final)
+
+- **Resultado:**
+  - ✅ Sistema de planificación completamente funcional
+  - ✅ Drag & drop sin errores de timezone
+  - ✅ Distribución rápida y avanzada trabajando correctamente
+  - ✅ Validaciones robustas backend y frontend
+  - ✅ UX clara con mensajes de error y advertencias
+  - ✅ Código mantenible con patrón documentado para fechas
+
+- **Commit realizado:**
+  ```
+  feat: Implementar Planificador de Capacidad con distribución de tareas
+
+  Backend:
+  - Crear módulo completo de Assignments con CRUD y validaciones
+  - Implementar validación de capacidad diaria (8h/día máximo)
+  - Agregar endpoints de bulk creation para multi-día
+  - Crear queries especializadas (dateRange, week, user)
+  - Implementar cálculo de capacity summary semanal
+
+  Frontend:
+  - Desarrollar AssignmentDistributionModal con dos modos
+  - Implementar WeeklyCalendarGrid con drag & drop funcional
+  - Agregar validaciones de timezone para fechas correctas
+  - Crear sistema de warnings para tareas fraccionadas
+  - Implementar sincronización correcta de requests asignados/sin asignar
+
+  Fixes críticos de timezone (5 rondas):
+  - Fix inicialización de días (domingo → lunes)
+  - Fix renderizado de fechas en JSX
+  - Fix guardado con día correcto (no día anterior)
+  - Fix sincronización después de F5
+  - Fix validaciones y mensajes de error
+
+  Patrón establecido: Parseo manual de fechas en lugar de UTC
+
+  Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+  ```
+
+- ⏱️ Tiempo: ~6 horas (incluye 5 rondas de debugging de timezone + validaciones + warnings)
+
+---
+
+## 16 de Enero 2026 - 17:00: Integración Completa Planificador ↔ Gestión de Solicitudes + Mejoras UX
+
+### 🎯 Objetivo
+Integrar completamente el Planificador de Capacidad con la Gestión de Solicitudes para que las asignaciones se reflejen automáticamente, mejorar la experiencia de usuario del planificador y corregir el sistema de filtros.
+
+### ✅ Características Implementadas
+
+#### 1. Integración Planificador ↔ Gestión de Solicitudes
+**Backend (assignments.service.ts):**
+- **Cambio automático de estado:** Al crear una asignación, el request cambia automáticamente de `INTAKE`/`BACKLOG` a `IN_PROGRESS`
+- **Activity Logs completo:** Registro de todas las operaciones de asignaciones:
+  - CREATE: "X fue asignado a la tarea 'Y' (Zh)"
+  - UPDATE: "Se actualizó la asignación de X en 'Y' (cambios específicos)"
+  - DELETE: "Se eliminó la asignación de X de la tarea 'Y'"
+  - Bulk: "X fue asignado a la tarea 'Y' (N días, Zh total)"
+- **Sincronización Socket.io:** Eventos `request:updated` para actualización en tiempo real
+- **Metadatos detallados:** Cada log incluye requestId, userId, horas, fechas, etc.
+
+**Frontend (RequestTable.jsx):**
+- **Avatares con iniciales:** Mostrar usuarios asignados con sus iniciales (ej: "AR" para Ana Rodríguez)
+- **Cálculo de iniciales:** Primera letra nombre + primera letra apellido
+- **Fix de datos:** Corregir acceso a `assignmentsData.data` en lugar de `assignmentsData.data.assignments`
+- **Estilo mejorado:** Avatares con fondo `bg-primary/10` y texto `text-primary`
+
+#### 2. Mejoras al Planificador de Capacidad
+
+**Colores de Barras de Capacidad:**
+- **Función unificada:** `getCapacityBarColor(percentage)` para consistencia
+- **Rangos corregidos:**
+  - Verde (Disponible): < 60%
+  - Accent (Cerca de Capacidad): 60-79%
+  - Amarillo (Alta Utilización): 80-99%
+  - Rojo (Sobrecargado): ≥ 100%
+- **Aplicado en:** Barras diarias, barras semanales, texto de porcentaje
+
+**Layout y Visualización:**
+- **Columnas uniformes:** `table-layout: fixed` con `<colgroup>` para anchos iguales
+- **Ancho fijo columna miembros:** 220px
+- **Distribución proporcional:** Los 5 días se distribuyen el espacio restante uniformemente
+
+**Panel de Detalles de Miembro:**
+- **Oculto por defecto:** Panel no aparece al cargar la página
+- **Click en nombre:** Hacer clic en el nombre del miembro muestra el panel
+- **Botón cerrar funcional:** `type="button"` + `stopPropagation()` + validación `onClose`
+- **Datos reales:** Capacidad, utilización %, email, estado, habilidades
+- **Eliminado useEffect:** Quitado auto-selección del primer miembro
+
+**UI Simplificada:**
+- **Eliminados botones:** "Guardar Escenario", "Sugerencias", "Cargar escenario"
+- **Limpieza de código:** Removidas funciones y estado relacionados (`scenarios`, `handleSaveScenario`, `handleLoadScenario`)
+
+#### 3. Sistema de Filtros Corregido
+
+**Mapeo correcto Backend ↔ Frontend:**
+```javascript
+// Tipos
+PRODUCT_FEATURE → "Producto"
+CUSTOMIZATION → "Personalización"
+BUG → "Error"
+SUPPORT → "Soporte"
+INFRASTRUCTURE → "Infraestructura"
+
+// Prioridades
+CRITICAL → "Crítico"
+HIGH → "Alto"
+MEDIUM → "Medio"
+LOW → "Bajo"
+```
+
+**Funciones Helper:**
+- `getTypeLabel(type)`: Convierte códigos del backend a etiquetas en español
+- `getPriorityLabel(priority)`: Convierte códigos de prioridad a español
+- `getTypeStyle(type)`: Actualizado con códigos correctos
+- `getPriorityStyle(priority)`: Actualizado con códigos correctos
+
+**Filtrado Completo:**
+- **Solicitudes sin asignar:** Filtradas en `UnassignedRequestQueue`
+- **Asignaciones en calendario:** Filtradas en el componente principal con `getFilteredAssignments()`
+- **Estadísticas de capacidad:** Recalculadas solo con asignaciones filtradas
+- **Indicador visual:** Badge "Filtros activos" cuando hay filtros aplicados
+- **Filtro de equipo eliminado:** Solo Tipo y Prioridad
+
+#### 4. Exportación a Excel
+
+**Implementación (WeeklyCalendarGrid.jsx):**
+- **Librería:** `xlsx` (ya instalada)
+- **Estructura de datos:**
+  - Columna 1: Nombre del miembro
+  - Columna 2: Capacidad semanal
+  - Columnas 3-7: Asignaciones por día (Lun-Vie)
+  - Columna 8: Total asignado
+  - Columna 9: Horas disponibles
+  - Columna 10: Utilización (%)
+
+**Formato profesional:**
+- **Encabezados:** Negrita, centrados, con fondo de color
+- **Anchos de columna:** Ajustados automáticamente (`wch`)
+- **Múltiples tareas por día:** Separadas con saltos de línea
+- **Nombre de archivo dinámico:** `Planning_DD-MMM_al_DD-MMM.xlsx`
+
+**Ejemplo de archivo generado:**
+```
+Planning_16-ene_al_20-ene.xlsx
+```
+
+#### 5. Scripts y Correcciones
+
+**Script fix-request-statuses.ts:**
+- **Propósito:** Corregir requests con asignaciones pero en estado INTAKE/BACKLOG
+- **Ubicación:** `backend/src/scripts/fix-request-statuses.ts`
+- **Funcionalidad:**
+  - Busca requests con asignaciones
+  - Identifica los que están en INTAKE o BACKLOG
+  - Los actualiza a IN_PROGRESS
+  - Muestra log detallado de cambios
+- **Ejecución:** `npx tsx src/scripts/fix-request-statuses.ts`
+- **Resultados:** 2 requests corregidos (REQ-1003, REQ-1005)
+
+### 🔧 Detalles Técnicos
+
+#### Activity Logs Integration
+```typescript
+// Registro en creación de asignación
+await ActivityLogsService.create({
+  userId: user.id,
+  userName: user.name,
+  userEmail: user.email,
+  action: 'CREATE',
+  entity: 'ASSIGNMENT',
+  entityId: assignment.id,
+  description: `${user.name} fue asignado a la tarea "${request.title}" (${data.allocatedHours}h)`,
+  metadata: {
+    requestId: request.id,
+    requestTitle: request.title,
+    userId: user.id,
+    userName: user.name,
+    allocatedHours: data.allocatedHours,
+    assignedDate: assignedDate.toISOString(),
+  },
+  ipAddress: '',
+  userAgent: '',
+});
+```
+
+#### Filtrado de Asignaciones
+```javascript
+const getFilteredAssignments = () => {
+  return assignments.filter(assignment => {
+    // Filtro por tipo
+    if (filters.type !== 'all' && assignment.requestType !== filters.type) {
+      return false;
+    }
+
+    // Filtro por prioridad
+    if (filters.priority !== 'all' && assignment.priority !== filters.priority) {
+      return false;
+    }
+
+    return true;
+  });
+};
+```
+
+#### Avatares con Iniciales
+```javascript
+const nameParts = user?.name?.split(' ') || [];
+const initials = nameParts.length >= 2
+  ? `${nameParts[0]?.charAt(0)}${nameParts[1]?.charAt(0)}`.toUpperCase()
+  : nameParts[0]?.charAt(0)?.toUpperCase() || '?';
+```
+
+#### Exportación a Excel
+```javascript
+const handleExport = () => {
+  const data = [];
+
+  // Encabezados
+  const headers = ['Miembro del Equipo', 'Capacidad Semanal'];
+  weekDays.forEach(day => {
+    headers.push(day.toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: 'short' }));
+  });
+  headers.push('Total Asignado', 'Disponible', 'Utilización (%)');
+  data.push(headers);
+
+  // Datos por miembro
+  teamMembers.forEach(member => {
+    const row = [member.name, `${member.capacity}h`];
+    // ... agregar días y estadísticas
+    data.push(row);
+  });
+
+  // Crear y descargar archivo
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Planning Semanal');
+  XLSX.writeFile(wb, fileName);
+};
+```
+
+### 📊 Impacto
+
+**Integración Backend ↔ Frontend:**
+- ✅ Asignaciones del planificador reflejadas automáticamente en gestión de solicitudes
+- ✅ Estados actualizados sin intervención manual
+- ✅ Trazabilidad completa en Activity Logs
+- ✅ Sincronización en tiempo real
+
+**Mejoras de UX:**
+- ✅ Colores consistentes en todo el sistema
+- ✅ Columnas uniformes para mejor legibilidad
+- ✅ Panel de detalles solo cuando se necesita (más espacio)
+- ✅ Filtros funcionando correctamente
+- ✅ Exportación profesional a Excel
+
+**Calidad de Datos:**
+- ✅ Script de corrección para datos históricos
+- ✅ Validación automática de estados
+- ✅ Mapeo correcto de enums del backend
+
+### 📝 Archivos Modificados
+
+**Backend:**
+- `src/modules/assignments/assignments.service.ts` - Integración con Activity Logs y cambio de estado
+- `src/scripts/fix-request-statuses.ts` - Script de corrección (nuevo)
+
+**Frontend - Planificador:**
+- `pages/capacity-planning-workspace/index.jsx` - Filtrado y eliminación de funciones innecesarias
+- `pages/capacity-planning-workspace/components/FilterToolbar.jsx` - Corrección de valores y eliminación de filtro de equipo
+- `pages/capacity-planning-workspace/components/UnassignedRequestQueue.jsx` - Mapeo correcto de enums y etiquetas
+- `pages/capacity-planning-workspace/components/WeeklyCalendarGrid.jsx` - Colores, columnas, exportación a Excel
+- `pages/capacity-planning-workspace/components/TeamMemberPanel.jsx` - Panel oculto por defecto y datos reales
+
+**Frontend - Gestión de Solicitudes:**
+- `pages/request-management-center/index.jsx` - Fix de acceso a datos de asignaciones
+- `pages/request-management-center/components/RequestTable.jsx` - Avatares con iniciales
+
+### 🎓 Lecciones Aprendidas
+
+1. **Sincronización de Enums:** Importante mapear correctamente los enums del backend (CRITICAL, HIGH, BUG) con las etiquetas del frontend (Crítico, Alto, Error)
+
+2. **Estructura de Respuestas:** Verificar la estructura exacta de las respuestas del backend (`data` vs `data.assignments`)
+
+3. **Cálculo de Iniciales:** Considerar casos edge (nombres sin apellido, nombres vacíos)
+
+4. **Table Layout Fixed:** Esencial para columnas uniformes, requiere usar `<colgroup>` para control preciso
+
+5. **Activity Logs:** Incluir metadatos ricos para mejor trazabilidad
+
+6. **Scripts de Corrección:** Útiles para corregir datos históricos cuando se implementan nuevas reglas de negocio
+
+### ⏱️ Resumen de Tareas
+
+- Integración Planificador ↔ Gestión de Solicitudes: ~2 horas
+- Mejoras visuales y UX del Planificador: ~1.5 horas
+- Corrección del sistema de filtros: ~1 hora
+- Implementación de exportación a Excel: ~45 minutos
+- Script de corrección y testing: ~45 minutos
+
+**Total:** ~6 horas
+
+---
+
+**Última actualización:** 16 de Enero 2026 - 17:00
 **Desarrollado por:** Claude Code + Usuario
