@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
+import * as XLSX from 'xlsx';
 
-const WeeklyCalendarGrid = ({ 
-  weekStart, 
-  teamMembers, 
-  assignments, 
-  onDrop, 
+const WeeklyCalendarGrid = ({
+  weekStart,
+  teamMembers,
+  assignments,
+  onDrop,
   onAssignmentClick,
-  onWeekChange 
+  onWeekChange,
+  onMemberClick
 }) => {
   const [dragOverCell, setDragOverCell] = useState(null);
 
@@ -42,6 +44,13 @@ const WeeklyCalendarGrid = ({
     if (percentage >= 80) return 'bg-warning text-warning-foreground';
     if (percentage >= 60) return 'bg-accent text-accent-foreground';
     return 'bg-success text-success-foreground';
+  };
+
+  const getCapacityBarColor = (percentage) => {
+    if (percentage >= 100) return 'bg-error';
+    if (percentage >= 80) return 'bg-warning';
+    if (percentage >= 60) return 'bg-accent';
+    return 'bg-success';
   };
 
   const getAssignmentsForCell = (memberId, date) => {
@@ -140,6 +149,82 @@ const WeeklyCalendarGrid = ({
     }
   };
 
+  const handleExport = () => {
+    // Crear datos para la hoja de Excel
+    const data = [];
+
+    // Encabezados
+    const headers = ['Miembro del Equipo', 'Capacidad Semanal'];
+    weekDays.forEach(day => {
+      headers.push(day.toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: 'short' }));
+    });
+    headers.push('Total Asignado', 'Disponible', 'Utilización (%)');
+    data.push(headers);
+
+    // Fila por cada miembro del equipo
+    teamMembers.forEach(member => {
+      const weeklyStats = calculateWeeklyCapacity(member.id);
+      const row = [member.name, `${member.capacity}h`];
+
+      // Agregar asignaciones por día
+      weekDays.forEach(day => {
+        const cellAssignments = getAssignmentsForCell(member.id, day);
+        if (cellAssignments.length > 0) {
+          const cellContent = cellAssignments
+            .map(a => `${a.requestTitle} (${a.hours}h)`)
+            .join('\n');
+          row.push(cellContent);
+        } else {
+          row.push('-');
+        }
+      });
+
+      // Agregar estadísticas
+      row.push(`${weeklyStats.used}h`);
+      row.push(`${weeklyStats.available}h`);
+      row.push(`${weeklyStats.percentage}%`);
+
+      data.push(row);
+    });
+
+    // Crear libro de trabajo
+    const ws = XLSX.utils.aoa_to_sheet(data);
+
+    // Ajustar anchos de columna
+    const colWidths = [
+      { wch: 25 }, // Nombre del miembro
+      { wch: 15 }, // Capacidad semanal
+      ...weekDays.map(() => ({ wch: 30 })), // Días
+      { wch: 15 }, // Total asignado
+      { wch: 15 }, // Disponible
+      { wch: 15 }, // Utilización
+    ];
+    ws['!cols'] = colWidths;
+
+    // Aplicar estilo al encabezado
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const address = XLSX.utils.encode_col(C) + "1";
+      if (!ws[address]) continue;
+      ws[address].s = {
+        font: { bold: true },
+        fill: { fgColor: { rgb: "4F81BD" } },
+        alignment: { horizontal: "center", vertical: "center" }
+      };
+    }
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Planning Semanal');
+
+    // Generar nombre de archivo con fecha
+    const startDate = formatDate(weekDays[0]).replace(/ /g, '-');
+    const endDate = formatDate(weekDays[4]).replace(/ /g, '-');
+    const fileName = `Planning_${startDate}_al_${endDate}.xlsx`;
+
+    // Descargar archivo
+    XLSX.writeFile(wb, fileName);
+  };
+
   return (
     <div className="h-full flex flex-col bg-card">
       <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30">
@@ -175,20 +260,26 @@ const WeeklyCalendarGrid = ({
         </h3>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" iconName="Download">
+          <Button variant="outline" size="sm" iconName="Download" onClick={handleExport}>
             Exportar
           </Button>
         </div>
       </div>
       <div className="flex-1 overflow-auto">
-        <table className="w-full border-collapse">
+        <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '220px' }} />
+            {weekDays?.map((_, idx) => (
+              <col key={idx} />
+            ))}
+          </colgroup>
           <thead className="sticky top-0 z-10 bg-muted/50 backdrop-blur-sm">
             <tr>
-              <th className="w-48 p-3 text-left text-sm font-caption font-semibold text-foreground border-b border-r border-border">
+              <th className="p-3 text-left text-sm font-caption font-semibold text-foreground border-b border-r border-border">
                 Miembro del Equipo
               </th>
               {weekDays?.map((day, idx) => (
-                <th key={idx} className="p-3 text-center text-sm font-caption font-semibold text-foreground border-b border-border min-w-[180px]">
+                <th key={idx} className="p-3 text-center text-sm font-caption font-semibold text-foreground border-b border-border">
                   <div>{day?.toLocaleDateString('es-MX', { weekday: 'short' })}</div>
                   <div className="text-xs text-muted-foreground font-normal">{formatDate(day)}</div>
                 </th>
@@ -203,7 +294,11 @@ const WeeklyCalendarGrid = ({
                 <React.Fragment key={member?.id}>
                   <tr className="border-b border-border hover:bg-muted/30 transition-smooth">
                 <td className="p-3 border-r border-border bg-muted/20">
-                  <div className="flex items-center gap-3">
+                  <div
+                    className="flex items-center gap-3 cursor-pointer hover:bg-muted/30 transition-smooth rounded p-1 -m-1"
+                    onClick={() => onMemberClick && onMemberClick(member)}
+                    title="Ver detalles del miembro"
+                  >
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                       <span className="text-sm font-caption font-semibold text-primary">
                         {member?.name?.split(' ')?.map(n => n?.[0])?.join('')}
@@ -261,8 +356,9 @@ const WeeklyCalendarGrid = ({
                                 {dayStats.totalHours}h / {dayStats.dailyCapacity}h
                               </span>
                               <span className={`font-medium ${
-                                dayStats.percentage >= 100 ? 'text-destructive' :
+                                dayStats.percentage >= 100 ? 'text-error' :
                                 dayStats.percentage >= 80 ? 'text-warning' :
+                                dayStats.percentage >= 60 ? 'text-accent' :
                                 'text-success'
                               }`}>
                                 {dayStats.percentage}%
@@ -270,11 +366,7 @@ const WeeklyCalendarGrid = ({
                             </div>
                             <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                               <div
-                                className={`h-full transition-all ${
-                                  dayStats.percentage >= 100 ? 'bg-destructive' :
-                                  dayStats.percentage >= 80 ? 'bg-warning' :
-                                  'bg-success'
-                                }`}
+                                className={`h-full transition-all ${getCapacityBarColor(dayStats.percentage)}`}
                                 style={{ width: `${Math.min(dayStats.percentage, 100)}%` }}
                               />
                             </div>
@@ -296,11 +388,7 @@ const WeeklyCalendarGrid = ({
                         <div className="flex-1">
                           <div className="h-2 bg-muted rounded-full overflow-hidden">
                             <div
-                              className={`h-full transition-all ${
-                                weeklyStats.percentage >= 100 ? 'bg-destructive' :
-                                weeklyStats.percentage >= 80 ? 'bg-warning' :
-                                'bg-primary'
-                              }`}
+                              className={`h-full transition-all ${getCapacityBarColor(weeklyStats.percentage)}`}
                               style={{ width: `${Math.min(weeklyStats.percentage, 100)}%` }}
                             />
                           </div>
@@ -309,9 +397,10 @@ const WeeklyCalendarGrid = ({
                           {weeklyStats.used}h / {weeklyStats.total}h
                         </span>
                         <span className={`text-xs font-semibold w-12 text-right ${
-                          weeklyStats.percentage >= 100 ? 'text-destructive' :
+                          weeklyStats.percentage >= 100 ? 'text-error' :
                           weeklyStats.percentage >= 80 ? 'text-warning' :
-                          'text-primary'
+                          weeklyStats.percentage >= 60 ? 'text-accent' :
+                          'text-success'
                         }`}>
                           {weeklyStats.percentage}%
                         </span>

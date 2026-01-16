@@ -1,6 +1,7 @@
 import prisma from '../../config/database';
 import { AppError } from '../../utils/errors.util';
 import logger from '../../config/logger';
+import { ActivityLogsService } from '../activity-logs/activity-logs.service';
 import type {
   CreateAssignmentDTO,
   UpdateAssignmentDTO,
@@ -187,6 +188,63 @@ export class AssignmentsService {
 
       logger.info(`Assignment created: ${assignment.id}`);
 
+      // Update request status to IN_PROGRESS if it's in INTAKE or BACKLOG
+      if (request.status === 'INTAKE' || request.status === 'BACKLOG') {
+        await prisma.request.update({
+          where: { id: data.requestId },
+          data: { status: 'IN_PROGRESS' },
+        });
+        logger.info(`Request ${data.requestId} status updated to IN_PROGRESS`);
+
+        // Emit Socket.io event for request update
+        try {
+          const { io } = await import('../../server');
+          const updatedRequest = await prisma.request.findUnique({
+            where: { id: data.requestId },
+            include: {
+              product: { select: { id: true, name: true } },
+              client: { select: { id: true, name: true } },
+            },
+          });
+          io.emit('request:updated', updatedRequest);
+        } catch (error) {
+          logger.warn('Socket.io not available for request update');
+        }
+      }
+
+      // Register in activity logs
+      try {
+        await ActivityLogsService.create({
+          userId: user.id,
+          userName: user.name,
+          userEmail: user.email,
+          action: 'CREATE',
+          entity: 'ASSIGNMENT',
+          entityId: assignment.id,
+          description: `${user.name} fue asignado a la tarea "${request.title}" (${data.allocatedHours}h)`,
+          metadata: {
+            requestId: request.id,
+            requestTitle: request.title,
+            userId: user.id,
+            userName: user.name,
+            allocatedHours: data.allocatedHours,
+            assignedDate: assignedDate.toISOString(),
+          },
+          ipAddress: '',
+          userAgent: '',
+        });
+      } catch (error) {
+        logger.warn('Failed to create activity log for assignment');
+      }
+
+      // Emit Socket.io event
+      try {
+        const { io } = await import('../../server');
+        io.emit('assignment:created', assignment);
+      } catch (error) {
+        logger.warn('Socket.io not available yet');
+      }
+
       return assignment as AssignmentResponse;
     } catch (error) {
       logger.error('Error creating assignment:', error);
@@ -254,6 +312,85 @@ export class AssignmentsService {
       );
 
       logger.info(`${created.length} assignments created in bulk`);
+
+      // Get unique request IDs and update their status if needed
+      const uniqueRequestIds = [...new Set(created.map(a => a.requestId))];
+
+      for (const requestId of uniqueRequestIds) {
+        const request = await prisma.request.findUnique({
+          where: { id: requestId },
+          include: {
+            product: { select: { id: true, name: true } },
+            client: { select: { id: true, name: true } },
+          },
+        });
+
+        if (request && (request.status === 'INTAKE' || request.status === 'BACKLOG')) {
+          await prisma.request.update({
+            where: { id: requestId },
+            data: { status: 'IN_PROGRESS' },
+          });
+          logger.info(`Request ${requestId} status updated to IN_PROGRESS`);
+
+          // Emit Socket.io event for request update
+          try {
+            const { io } = await import('../../server');
+            const updatedRequest = await prisma.request.findUnique({
+              where: { id: requestId },
+              include: {
+                product: { select: { id: true, name: true } },
+                client: { select: { id: true, name: true } },
+              },
+            });
+            io.emit('request:updated', updatedRequest);
+          } catch (error) {
+            logger.warn('Socket.io not available for request update');
+          }
+        }
+
+        // Register in activity logs (one log per request with aggregated info)
+        const requestAssignments = created.filter(a => a.requestId === requestId);
+        const totalHours = requestAssignments.reduce((sum, a) => sum + a.allocatedHours, 0);
+        const assignedUser = requestAssignments[0].user;
+
+        try {
+          await ActivityLogsService.create({
+            userId: assignedUser.id,
+            userName: assignedUser.name,
+            userEmail: assignedUser.email,
+            action: 'CREATE',
+            entity: 'ASSIGNMENT',
+            entityId: requestId,
+            description: `${assignedUser.name} fue asignado a la tarea "${request?.title}" (${requestAssignments.length} días, ${totalHours}h total)`,
+            metadata: {
+              requestId: requestId,
+              requestTitle: request?.title,
+              userId: assignedUser.id,
+              userName: assignedUser.name,
+              totalAllocatedHours: totalHours,
+              assignmentCount: requestAssignments.length,
+              assignments: requestAssignments.map(a => ({
+                date: a.assignedDate,
+                hours: a.allocatedHours,
+              })),
+            },
+            ipAddress: '',
+            userAgent: '',
+          });
+        } catch (error) {
+          logger.warn('Failed to create activity log for bulk assignment');
+        }
+      }
+
+      // Emit Socket.io event for each created assignment
+      try {
+        const { io } = await import('../../server');
+        created.forEach(assignment => {
+          io.emit('assignment:created', assignment);
+        });
+      } catch (error) {
+        logger.warn('Socket.io not available yet');
+      }
 
       return created as AssignmentResponse[];
     } catch (error) {
@@ -330,6 +467,55 @@ export class AssignmentsService {
 
       logger.info(`Assignment updated: ${id}`);
 
+      // Register in activity logs
+      const changes: string[] = [];
+      if (data.allocatedHours && data.allocatedHours !== existingAssignment.allocatedHours) {
+        changes.push(`horas: ${existingAssignment.allocatedHours}h → ${data.allocatedHours}h`);
+      }
+      if (data.status && data.status !== existingAssignment.status) {
+        changes.push(`estado: ${existingAssignment.status} → ${data.status}`);
+      }
+      if (data.notes && data.notes !== existingAssignment.notes) {
+        changes.push('notas actualizadas');
+      }
+
+      if (changes.length > 0) {
+        try {
+          await ActivityLogsService.create({
+            userId: assignment.user.id,
+            userName: assignment.user.name,
+            userEmail: assignment.user.email,
+            action: 'UPDATE',
+            entity: 'ASSIGNMENT',
+            entityId: assignment.id,
+            description: `Se actualizó la asignación de ${assignment.user.name} en "${assignment.request.title}" (${changes.join(', ')})`,
+            metadata: {
+              requestId: assignment.request.id,
+              requestTitle: assignment.request.title,
+              userId: assignment.user.id,
+              userName: assignment.user.name,
+              changes: {
+                allocatedHours: { old: existingAssignment.allocatedHours, new: data.allocatedHours },
+                status: { old: existingAssignment.status, new: data.status },
+                notes: { old: existingAssignment.notes, new: data.notes },
+              },
+            },
+            ipAddress: '',
+            userAgent: '',
+          });
+        } catch (error) {
+          logger.warn('Failed to create activity log for assignment update');
+        }
+      }
+
+      // Emit Socket.io event
+      try {
+        const { io } = await import('../../server');
+        io.emit('assignment:updated', assignment);
+      } catch (error) {
+        logger.warn('Socket.io not available yet');
+      }
+
       return assignment as AssignmentResponse;
     } catch (error) {
       logger.error('Error updating assignment:', error);
@@ -344,10 +530,50 @@ export class AssignmentsService {
     try {
       const assignment = await prisma.assignment.findUnique({
         where: { id },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          request: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
+        },
       });
 
       if (!assignment) {
         throw new AppError('Assignment not found', 404);
+      }
+
+      // Register in activity logs before deleting
+      try {
+        await ActivityLogsService.create({
+          userId: assignment.user.id,
+          userName: assignment.user.name,
+          userEmail: assignment.user.email,
+          action: 'DELETE',
+          entity: 'ASSIGNMENT',
+          entityId: assignment.id,
+          description: `Se eliminó la asignación de ${assignment.user.name} de la tarea "${assignment.request.title}" (${assignment.allocatedHours}h)`,
+          metadata: {
+            requestId: assignment.request.id,
+            requestTitle: assignment.request.title,
+            userId: assignment.user.id,
+            userName: assignment.user.name,
+            allocatedHours: assignment.allocatedHours,
+            assignedDate: assignment.assignedDate.toISOString(),
+          },
+          ipAddress: '',
+          userAgent: '',
+        });
+      } catch (error) {
+        logger.warn('Failed to create activity log for assignment deletion');
       }
 
       await prisma.assignment.delete({
@@ -355,6 +581,14 @@ export class AssignmentsService {
       });
 
       logger.info(`Assignment deleted: ${id}`);
+
+      // Emit Socket.io event
+      try {
+        const { io } = await import('../../server');
+        io.emit('assignment:deleted', { id, requestId: assignment.requestId });
+      } catch (error) {
+        logger.warn('Socket.io not available yet');
+      }
     } catch (error) {
       logger.error('Error deleting assignment:', error);
       throw error;

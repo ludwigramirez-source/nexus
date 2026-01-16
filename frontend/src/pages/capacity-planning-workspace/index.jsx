@@ -34,14 +34,12 @@ const CapacityPlanningWorkspace = () => {
 
   const [filters, setFilters] = useState({
     type: 'all',
-    priority: 'all',
-    team: 'all'
+    priority: 'all'
   });
 
   const [unassignedRequests, setUnassignedRequests] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [assignments, setAssignments] = useState([]);
-  const [scenarios, setScenarios] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -157,12 +155,6 @@ const CapacityPlanningWorkspace = () => {
     };
   }, [weekStart]);
 
-  useEffect(() => {
-    if (teamMembers?.length > 0 && !selectedMember) {
-      setSelectedMember(teamMembers?.[0]);
-    }
-  }, [teamMembers, selectedMember]);
-
   const handleDrop = (request, memberId, date) => {
     const member = teamMembers?.find(m => m?.id === memberId);
     if (!member) return;
@@ -275,25 +267,24 @@ const CapacityPlanningWorkspace = () => {
     }
   };
 
-  const handleSaveScenario = () => {
-    const scenarioName = prompt('Nombre del escenario:');
-    if (scenarioName) {
-      const newScenario = {
-        id: `scenario-${Date.now()}`,
-        name: scenarioName,
-        createdAt: new Date()?.toISOString(),
-        assignments: [...assignments]
-      };
-      setScenarios([...scenarios, newScenario]);
-    }
+  // Filtrar asignaciones según los filtros activos
+  const getFilteredAssignments = () => {
+    return assignments.filter(assignment => {
+      // Filtro por tipo
+      if (filters.type !== 'all' && assignment.requestType !== filters.type) {
+        return false;
+      }
+
+      // Filtro por prioridad
+      if (filters.priority !== 'all' && assignment.priority !== filters.priority) {
+        return false;
+      }
+
+      return true;
+    });
   };
 
-  const handleLoadScenario = (scenarioId) => {
-    const scenario = scenarios?.find(s => s?.id === scenarioId);
-    if (scenario) {
-      setAssignments(scenario?.assignments);
-    }
-  };
+  const filteredAssignments = getFilteredAssignments();
 
   const calculateWeeklyStats = (memberId) => {
     const member = teamMembers?.find(m => m?.id === memberId);
@@ -302,13 +293,13 @@ const CapacityPlanningWorkspace = () => {
     const weekEnd = new Date(weekStart);
     weekEnd?.setDate(weekStart?.getDate() + 4);
 
-    const weekAssignments = assignments?.filter(a => {
+    const weekAssignments = filteredAssignments?.filter(a => {
       const assignDate = new Date(a.date);
       return a?.memberId === memberId && assignDate >= weekStart && assignDate <= weekEnd;
     });
 
     const assigned = weekAssignments?.reduce((sum, a) => sum + a?.hours, 0);
-    const available = member?.weeklyCapacity - assigned;
+    const available = member?.capacity - assigned;
 
     return { assigned, available };
   };
@@ -346,9 +337,6 @@ const CapacityPlanningWorkspace = () => {
             <FilterToolbar
               filters={filters}
               onFilterChange={setFilters}
-              onSaveScenario={handleSaveScenario}
-              onLoadScenario={handleLoadScenario}
-              scenarios={scenarios}
             />
 
             <div className="flex-1 flex overflow-hidden">
@@ -361,23 +349,27 @@ const CapacityPlanningWorkspace = () => {
                 />
               </div>
 
-              <div className="hidden lg:block flex-1 overflow-hidden">
+              <div className={`hidden lg:block flex-1 overflow-hidden ${selectedMember ? 'lg:w-3/5' : ''}`}>
                 <WeeklyCalendarGrid
                   weekStart={weekStart}
                   teamMembers={teamMembers}
-                  assignments={assignments}
+                  assignments={filteredAssignments}
                   onDrop={handleDrop}
                   onAssignmentClick={handleAssignmentClick}
                   onWeekChange={setWeekStart}
+                  onMemberClick={setSelectedMember}
                 />
               </div>
 
-              <div className="hidden lg:block w-1/5 overflow-hidden">
-                <TeamMemberPanel
-                  selectedMember={selectedMember}
-                  weeklyStats={selectedMember ? calculateWeeklyStats(selectedMember?.id) : null}
-                />
-              </div>
+              {selectedMember && (
+                <div className="hidden lg:block w-1/5 overflow-hidden">
+                  <TeamMemberPanel
+                    selectedMember={selectedMember}
+                    weeklyStats={calculateWeeklyStats(selectedMember?.id)}
+                    onClose={() => setSelectedMember(null)}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="lg:hidden p-4 bg-card border-t border-border">

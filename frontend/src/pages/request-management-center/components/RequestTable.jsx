@@ -145,9 +145,6 @@ const RequestTable = ({ requests, onRequestSelect, selectedRequests, onBulkActio
               <span className="text-xs md:text-sm font-caption font-medium text-foreground">Horas Est.</span>
             </th>
             <th className="p-3 md:p-4 text-left">
-              <span className="text-xs md:text-sm font-caption font-medium text-foreground">Horas Real</span>
-            </th>
-            <th className="p-3 md:p-4 text-left">
               <span className="text-xs md:text-sm font-caption font-medium text-foreground">Estado</span>
             </th>
             <th className="p-3 md:p-4 text-left">
@@ -224,17 +221,25 @@ const RequestTable = ({ requests, onRequestSelect, selectedRequests, onBulkActio
               <td className="p-3 md:p-4">
                 {request?.assignedUsers && request?.assignedUsers?.length > 0 ? (
                   <div className="flex items-center -space-x-2">
-                    {request?.assignedUsers?.slice(0, 3)?.map((user, idx) => (
-                      <div
-                        key={user?.id}
-                        className="w-6 h-6 md:w-8 md:h-8 rounded-full border-2 border-card bg-muted flex items-center justify-center"
-                        title={user?.name}
-                      >
-                        <span className="text-xs font-medium text-foreground">
-                          {user?.name?.charAt(0)?.toUpperCase()}
-                        </span>
-                      </div>
-                    ))}
+                    {request?.assignedUsers?.slice(0, 3)?.map((user, idx) => {
+                      // Obtener iniciales (primera letra del nombre + primera letra del apellido)
+                      const nameParts = user?.name?.split(' ') || [];
+                      const initials = nameParts.length >= 2
+                        ? `${nameParts[0]?.charAt(0)}${nameParts[1]?.charAt(0)}`.toUpperCase()
+                        : nameParts[0]?.charAt(0)?.toUpperCase() || '?';
+
+                      return (
+                        <div
+                          key={user?.id}
+                          className="w-6 h-6 md:w-8 md:h-8 rounded-full border-2 border-card bg-primary/10 flex items-center justify-center"
+                          title={user?.name}
+                        >
+                          <span className="text-xs font-medium text-primary">
+                            {initials}
+                          </span>
+                        </div>
+                      );
+                    })}
                     {request?.assignedUsers?.length > 3 && (
                       <div className="w-6 h-6 md:w-8 md:h-8 rounded-full border-2 border-card bg-muted flex items-center justify-center">
                         <span className="text-xs font-medium text-foreground">
@@ -250,11 +255,6 @@ const RequestTable = ({ requests, onRequestSelect, selectedRequests, onBulkActio
               <td className="p-3 md:p-4">
                 <span className="text-xs md:text-sm font-caption text-foreground data-text">
                   {formatHoursCompact(request?.estimatedHours)}
-                </span>
-              </td>
-              <td className="p-3 md:p-4">
-                <span className="text-xs md:text-sm font-caption text-foreground data-text">
-                  {formatHoursCompact(request?.actualHours || 0)}
                 </span>
               </td>
               <td className="p-3 md:p-4">

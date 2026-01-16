@@ -3,35 +3,23 @@ import React from 'react';
 import Button from '../../../components/ui/Button';
 import Select from '../../../components/ui/Select';
 
-const FilterToolbar = ({ filters, onFilterChange, onSaveScenario, onLoadScenario, scenarios }) => {
+const FilterToolbar = ({ filters, onFilterChange }) => {
   const typeOptions = [
     { value: 'all', label: 'Todos los Tipos' },
-    { value: 'Producto', label: 'Producto' },
-    { value: 'Personalización', label: 'Personalización' },
-    { value: 'Error', label: 'Error' },
-    { value: 'Soporte', label: 'Soporte' },
-    { value: 'Infraestructura', label: 'Infraestructura' }
+    { value: 'PRODUCT_FEATURE', label: 'Producto' },
+    { value: 'CUSTOMIZATION', label: 'Personalización' },
+    { value: 'BUG', label: 'Error' },
+    { value: 'SUPPORT', label: 'Soporte' },
+    { value: 'INFRASTRUCTURE', label: 'Infraestructura' }
   ];
 
   const priorityOptions = [
     { value: 'all', label: 'Todas las Prioridades' },
-    { value: 'Crítico', label: 'Crítico' },
-    { value: 'Alto', label: 'Alto' },
-    { value: 'Medio', label: 'Medio' },
-    { value: 'Bajo', label: 'Bajo' }
+    { value: 'CRITICAL', label: 'Crítico' },
+    { value: 'HIGH', label: 'Alto' },
+    { value: 'MEDIUM', label: 'Medio' },
+    { value: 'LOW', label: 'Bajo' }
   ];
-
-  const teamOptions = [
-    { value: 'all', label: 'Todo el Equipo' },
-    { value: 'backend', label: 'Backend' },
-    { value: 'frontend', label: 'Frontend' },
-    { value: 'fullstack', label: 'Full Stack' }
-  ];
-
-  const scenarioOptions = scenarios?.map(s => ({
-    value: s?.id,
-    label: s?.name
-  }));
 
   return (
     <div className="p-4 bg-card border-b border-border">
@@ -51,50 +39,20 @@ const FilterToolbar = ({ filters, onFilterChange, onSaveScenario, onLoadScenario
             className="w-full sm:w-48"
           />
 
-          <Select
-            options={teamOptions}
-            value={filters?.team}
-            onChange={(value) => onFilterChange({ ...filters, team: value })}
-            className="w-full sm:w-48"
-          />
-
           <Button
             variant="outline"
             size="sm"
             iconName="RotateCcw"
-            onClick={() => onFilterChange({ type: 'all', priority: 'all', team: 'all' })}
+            onClick={() => onFilterChange({ type: 'all', priority: 'all' })}
           >
             Limpiar
           </Button>
-        </div>
 
-        <div className="flex items-center gap-2">
-          {scenarios?.length > 0 && (
-            <Select
-              placeholder="Cargar escenario..."
-              options={scenarioOptions}
-              value=""
-              onChange={(value) => onLoadScenario && onLoadScenario(value)}
-              className="w-48"
-            />
+          {(filters?.type !== 'all' || filters?.priority !== 'all') && (
+            <span className="text-xs font-caption text-muted-foreground px-2 py-1 bg-primary/10 rounded">
+              Filtros activos
+            </span>
           )}
-
-          <Button
-            variant="outline"
-            size="sm"
-            iconName="Save"
-            onClick={onSaveScenario}
-          >
-            Guardar Escenario
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            iconName="TrendingUp"
-          >
-            Sugerencias
-          </Button>
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-border">

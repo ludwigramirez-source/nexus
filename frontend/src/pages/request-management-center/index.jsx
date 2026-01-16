@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { requestService } from '../../services/requestService';
+import { assignmentService } from '../../services/assignmentService';
 import socketService from '../../services/socketService';
 import api from '../../services/api';
 import * as XLSX from 'xlsx';
@@ -67,8 +68,43 @@ const RequestManagementCenter = () => {
     const fetchRequests = async () => {
       try {
         setLoading(true);
-        const data = await requestService.getAll(filters);
-        setRequests(data.data || []);
+
+        // Cargar requests y asignaciones en paralelo
+        const [requestsData, assignmentsData] = await Promise.all([
+          requestService.getAll(filters),
+          assignmentService.getAll().catch(() => ({ data: [] }))
+        ]);
+
+        const requestsList = requestsData.data || [];
+        const assignmentsList = assignmentsData.data || [];
+
+        // Agrupar asignaciones por requestId para obtener usuarios únicos
+        const assignmentsByRequest = {};
+        assignmentsList.forEach(assignment => {
+          const requestId = assignment.request.id;
+          if (!assignmentsByRequest[requestId]) {
+            assignmentsByRequest[requestId] = [];
+          }
+          // Evitar duplicados de usuarios
+          const userExists = assignmentsByRequest[requestId].some(
+            u => u.id === assignment.user.id
+          );
+          if (!userExists) {
+            assignmentsByRequest[requestId].push({
+              id: assignment.user.id,
+              name: assignment.user.name,
+              email: assignment.user.email
+            });
+          }
+        });
+
+        // Agregar usuarios asignados desde el planificador a cada request
+        const requestsWithAssignments = requestsList.map(request => ({
+          ...request,
+          assignedUsers: assignmentsByRequest[request.id] || request.assignedUsers || []
+        }));
+
+        setRequests(requestsWithAssignments);
       } catch (error) {
         console.error("Error loading requests:", error);
         setRequests([]);
@@ -92,12 +128,23 @@ const RequestManagementCenter = () => {
       );
     };
 
+    const handleAssignmentChanged = () => {
+      // Refrescar requests cuando se crea/actualiza/elimina una asignación
+      fetchRequests();
+    };
+
     socketService.on("request:created", handleRequestCreated);
     socketService.on("request:updated", handleRequestUpdated);
+    socketService.on("assignment:created", handleAssignmentChanged);
+    socketService.on("assignment:updated", handleAssignmentChanged);
+    socketService.on("assignment:deleted", handleAssignmentChanged);
 
     return () => {
       socketService.off("request:created", handleRequestCreated);
       socketService.off("request:updated", handleRequestUpdated);
+      socketService.off("assignment:created", handleAssignmentChanged);
+      socketService.off("assignment:updated", handleAssignmentChanged);
+      socketService.off("assignment:deleted", handleAssignmentChanged);
     };
   }, [filters]);
 

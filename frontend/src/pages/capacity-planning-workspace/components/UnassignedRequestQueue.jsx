@@ -6,19 +6,91 @@ const UnassignedRequestQueue = ({ requests, onDragStart, onFilterChange, filters
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('priority');
 
-  const priorityColors = {
-    'Crítico': 'bg-error/10 text-error border-error/20',
-    'Alto': 'bg-warning/10 text-warning border-warning/20',
-    'Medio': 'bg-accent/10 text-accent border-accent/20',
-    'Bajo': 'bg-muted text-muted-foreground border-border'
+  const getPriorityStyle = (priority) => {
+    const styles = {
+      'CRITICAL': {
+        backgroundColor: '#fee2e2',
+        color: '#b91c1c',
+        border: '2px solid #ef4444',
+        fontWeight: '700'
+      },
+      'HIGH': {
+        backgroundColor: '#fef3c7',
+        color: '#b45309',
+        border: '2px solid #f59e0b',
+        fontWeight: '700'
+      },
+      'MEDIUM': {
+        backgroundColor: '#dbeafe',
+        color: '#1e40af',
+        border: '2px solid #3b82f6',
+        fontWeight: '600'
+      },
+      'LOW': {
+        backgroundColor: '#f1f5f9',
+        color: '#64748b',
+        border: '1px solid #cbd5e1',
+        fontWeight: '500'
+      }
+    };
+    return styles[priority] || styles['LOW'];
   };
 
-  const typeColors = {
-    'Producto': 'bg-success/10 text-success',
-    'Personalización': 'bg-accent/10 text-accent',
-    'Error': 'bg-error/10 text-error',
-    'Soporte': 'bg-primary/10 text-primary',
-    'Infraestructura': 'bg-secondary/10 text-secondary'
+  const getTypeLabel = (type) => {
+    const labels = {
+      'PRODUCT_FEATURE': 'Producto',
+      'CUSTOMIZATION': 'Personalización',
+      'BUG': 'Error',
+      'SUPPORT': 'Soporte',
+      'INFRASTRUCTURE': 'Infraestructura'
+    };
+    return labels[type] || type;
+  };
+
+  const getPriorityLabel = (priority) => {
+    const labels = {
+      'CRITICAL': 'Crítico',
+      'HIGH': 'Alto',
+      'MEDIUM': 'Medio',
+      'LOW': 'Bajo'
+    };
+    return labels[priority] || priority;
+  };
+
+  const getTypeStyle = (type) => {
+    const styles = {
+      'PRODUCT_FEATURE': {
+        backgroundColor: '#d1fae5',
+        color: '#047857',
+        border: '2px solid #10b981',
+        fontWeight: '600'
+      },
+      'CUSTOMIZATION': {
+        backgroundColor: '#ede9fe',
+        color: '#6d28d9',
+        border: '2px solid #8b5cf6',
+        fontWeight: '600'
+      },
+      'BUG': {
+        backgroundColor: '#ffe4e6',
+        color: '#be123c',
+        border: '2px solid #f43f5e',
+        fontWeight: '600'
+      },
+      'SUPPORT': {
+        backgroundColor: '#e0f2fe',
+        color: '#0369a1',
+        border: '2px solid #0ea5e9',
+        fontWeight: '600'
+      },
+      'INFRASTRUCTURE': {
+        backgroundColor: '#f3e8ff',
+        color: '#7e22ce',
+        border: '2px solid #a855f7',
+        fontWeight: '600'
+      }
+    };
+    return styles[type] || styles['SUPPORT'];
   };
 
   const filteredRequests = requests?.filter(req => 
@@ -99,8 +171,11 @@ const UnassignedRequestQueue = ({ requests, onDragStart, onFilterChange, filters
               className="p-3 bg-background border border-border rounded-lg cursor-move hover:shadow-elevation-2 transition-smooth"
             >
               <div className="flex items-start justify-between mb-2">
-                <span className={`px-2 py-0.5 text-xs font-caption font-medium rounded ${priorityColors?.[request?.priority]}`}>
-                  {request?.priority}
+                <span
+                  className="inline-flex items-center px-2.5 py-1 text-xs font-caption rounded-md shadow-sm"
+                  style={getPriorityStyle(request?.priority)}
+                >
+                  {getPriorityLabel(request?.priority)}
                 </span>
                 <Icon name="GripVertical" size={16} className="text-muted-foreground" />
               </div>
@@ -110,8 +185,11 @@ const UnassignedRequestQueue = ({ requests, onDragStart, onFilterChange, filters
               </h4>
 
               <div className="flex items-center justify-between">
-                <span className={`px-2 py-0.5 text-xs font-caption font-medium rounded ${typeColors?.[request?.type]}`}>
-                  {request?.type}
+                <span
+                  className="inline-flex items-center px-2.5 py-1 text-xs font-caption rounded-md"
+                  style={getTypeStyle(request?.type)}
+                >
+                  {getTypeLabel(request?.type)}
                 </span>
                 <div className="flex items-center gap-1 text-xs font-caption text-muted-foreground">
                   <Icon name="Clock" size={14} />
