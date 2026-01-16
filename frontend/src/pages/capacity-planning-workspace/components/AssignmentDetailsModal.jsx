@@ -3,11 +3,17 @@ import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 
-const AssignmentDetailsModal = ({ assignment, onClose, onUpdate, onDelete }) => {
+const AssignmentDetailsModal = ({ assignment, onClose, onUpdate, onDelete, allAssignments }) => {
   const [hours, setHours] = useState(assignment?.hours || 0);
   const [notes, setNotes] = useState(assignment?.notes || '');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   if (!assignment) return null;
+
+  // Verificar si hay múltiples asignaciones para el mismo request
+  const relatedAssignments = allAssignments?.filter(a => a.requestId === assignment.requestId) || [];
+  const isFragmented = relatedAssignments.length > 1;
+  const totalAssignedHours = relatedAssignments.reduce((sum, a) => sum + a.hours, 0);
 
   const handleSave = () => {
     if (onUpdate) {
@@ -18,6 +24,14 @@ const AssignmentDetailsModal = ({ assignment, onClose, onUpdate, onDelete }) => 
       });
     }
     onClose();
+  };
+
+  const handleDeleteClick = () => {
+    if (isFragmented) {
+      setShowDeleteConfirm(true);
+    } else {
+      handleDelete();
+    }
   };
 
   const handleDelete = () => {
@@ -112,8 +126,25 @@ const AssignmentDetailsModal = ({ assignment, onClose, onUpdate, onDelete }) => 
                     Estimación Original
                   </p>
                   <p className="text-sm font-caption text-muted-foreground">
-                    Esta solicitud fue estimada en {assignment?.estimatedHours} horas. 
+                    Esta solicitud fue estimada en {assignment?.estimatedHours} horas.
                     Actualmente has asignado {hours} horas.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isFragmented && (
+            <div className="p-4 bg-warning/10 rounded-lg border border-warning/20">
+              <div className="flex items-start gap-3">
+                <Icon name="AlertTriangle" size={20} className="text-warning flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-caption font-medium text-foreground mb-1">
+                    Tarea Fraccionada
+                  </p>
+                  <p className="text-sm font-caption text-muted-foreground">
+                    Esta tarea tiene {relatedAssignments.length} asignaciones distribuidas en diferentes días,
+                    con un total de {totalAssignedHours}h asignadas.
                   </p>
                 </div>
               </div>
@@ -125,7 +156,7 @@ const AssignmentDetailsModal = ({ assignment, onClose, onUpdate, onDelete }) => 
           <Button
             variant="danger"
             iconName="Trash2"
-            onClick={handleDelete}
+            onClick={handleDeleteClick}
           >
             Eliminar Asignación
           </Button>
@@ -147,6 +178,48 @@ const AssignmentDetailsModal = ({ assignment, onClose, onUpdate, onDelete }) => 
           </div>
         </div>
       </div>
+
+      {/* Diálogo de confirmación para eliminar tarea fraccionada */}
+      {showDeleteConfirm && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center p-4 bg-background/90 backdrop-blur-sm">
+          <div className="bg-card rounded-lg shadow-elevation-4 border border-border p-6 max-w-md w-full">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="p-2 bg-warning/10 rounded-lg">
+                <Icon name="AlertTriangle" size={24} className="text-warning" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-heading font-semibold text-foreground mb-2">
+                  ¿Eliminar asignación fraccionada?
+                </h3>
+                <p className="text-sm font-caption text-muted-foreground">
+                  Esta tarea tiene {relatedAssignments.length} asignaciones distribuidas.
+                  Al eliminar esta asignación de {assignment.hours}h, quedarán{' '}
+                  {totalAssignedHours - assignment.hours}h asignadas en los otros días.
+                </p>
+                <p className="text-sm font-caption text-muted-foreground mt-2">
+                  La tarea volverá a aparecer en "Solicitudes Sin Asignar" si quedan horas pendientes.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="danger"
+                iconName="Trash2"
+                onClick={handleDelete}
+              >
+                Eliminar de Todos Modos
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

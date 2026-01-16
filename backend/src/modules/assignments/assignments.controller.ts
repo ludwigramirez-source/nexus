@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { AssignmentsService } from './assignments.service';
 import {
   createAssignmentSchema,
+  createBulkAssignmentsSchema,
   updateAssignmentSchema,
   assignmentFiltersSchema,
 } from './assignments.types';
@@ -74,6 +75,24 @@ export class AssignmentsController {
   }
 
   /**
+   * Create multiple assignments (bulk)
+   * POST /api/assignments/bulk
+   */
+  static async createBulk(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      // Validate request
+      const validatedData = validateRequest(createBulkAssignmentsSchema, req.body);
+
+      const assignments = await AssignmentsService.createBulk(validatedData.assignments);
+
+      successResponse(res, assignments, 'Assignments created successfully', 201);
+    } catch (error) {
+      logger.error('Create bulk assignments error:', error);
+      next(error);
+    }
+  }
+
+  /**
    * Update assignment
    * PUT /api/assignments/:id
    */
@@ -140,6 +159,51 @@ export class AssignmentsController {
       successResponse(res, assignments, 'Assignments retrieved successfully', 200);
     } catch (error) {
       logger.error('Get assignments by user error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Get assignments by date range
+   * GET /api/assignments/by-date-range
+   */
+  static async getByDateRange(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { startDate, endDate } = req.query;
+
+      if (!startDate || !endDate) {
+        throw new Error('startDate and endDate are required');
+      }
+
+      const assignments = await AssignmentsService.getByDateRange(
+        startDate as string,
+        endDate as string
+      );
+
+      successResponse(res, assignments, 'Assignments retrieved successfully', 200);
+    } catch (error) {
+      logger.error('Get assignments by date range error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Get daily capacity summary
+   * GET /api/assignments/daily-capacity-summary
+   */
+  static async getDailyCapacitySummary(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { date } = req.query;
+
+      if (!date) {
+        throw new Error('date is required');
+      }
+
+      const summary = await AssignmentsService.getDailyCapacitySummary(date as string);
+
+      successResponse(res, summary, 'Daily capacity summary retrieved successfully', 200);
+    } catch (error) {
+      logger.error('Get daily capacity summary error:', error);
       next(error);
     }
   }

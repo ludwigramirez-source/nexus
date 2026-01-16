@@ -8,11 +8,32 @@ const router = Router();
 router.use(authenticate);
 
 /**
+ * @route   POST /api/assignments/bulk
+ * @desc    Create multiple assignments (bulk)
+ * @access  Private
+ */
+router.post('/bulk', AssignmentsController.createBulk);
+
+/**
  * @route   GET /api/assignments/capacity-summary
  * @desc    Get capacity summary
  * @access  Private
  */
 router.get('/capacity-summary', AssignmentsController.getCapacitySummary);
+
+/**
+ * @route   GET /api/assignments/daily-capacity-summary
+ * @desc    Get daily capacity summary
+ * @access  Private
+ */
+router.get('/daily-capacity-summary', AssignmentsController.getDailyCapacitySummary);
+
+/**
+ * @route   GET /api/assignments/by-date-range
+ * @desc    Get assignments by date range
+ * @access  Private
+ */
+router.get('/by-date-range', AssignmentsController.getByDateRange);
 
 /**
  * @route   GET /api/assignments/by-week/:weekStart

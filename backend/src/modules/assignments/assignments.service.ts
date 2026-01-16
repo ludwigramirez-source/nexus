@@ -15,7 +15,7 @@ export class AssignmentsService {
    */
   static async getAll(filters: AssignmentFilters) {
     try {
-      const { userId, requestId, weekStart, status, page = 1, limit = 20 } = filters;
+      const { userId, requestId, assignedDate, status, page = 1, limit = 20 } = filters;
 
       const skip = (page - 1) * limit;
 
@@ -25,7 +25,7 @@ export class AssignmentsService {
       if (userId) where.userId = userId;
       if (requestId) where.requestId = requestId;
       if (status) where.status = status;
-      if (weekStart) where.weekStart = new Date(weekStart);
+      if (assignedDate) where.assignedDate = new Date(assignedDate);
 
       // Get total count
       const total = await prisma.assignment.count({ where });
@@ -35,7 +35,7 @@ export class AssignmentsService {
         where,
         skip,
         take: limit,
-        orderBy: { weekStart: 'desc' },
+        orderBy: { assignedDate: 'desc' },
         include: {
           user: {
             select: {
@@ -134,34 +134,23 @@ export class AssignmentsService {
         throw new AppError('Request not found', 404);
       }
 
-      const weekStart = new Date(data.weekStart);
+      const assignedDate = new Date(data.assignedDate);
+      assignedDate.setHours(0, 0, 0, 0);
 
-      // Check if assignment already exists for this user, request, and week
-      const existingAssignment = await prisma.assignment.findFirst({
+      // Check capacity - DIARIA (no semanal)
+      const dayAssignments = await prisma.assignment.findMany({
         where: {
           userId: data.userId,
-          requestId: data.requestId,
-          weekStart,
+          assignedDate,
         },
       });
 
-      if (existingAssignment) {
-        throw new AppError('Assignment already exists for this week', 409);
-      }
+      const totalAllocated = dayAssignments.reduce((sum, a) => sum + a.allocatedHours, 0);
+      const dailyCapacity = user.capacity / 5; // 40h/semana ÷ 5 días = 8h/día
 
-      // Check capacity
-      const weekAssignments = await prisma.assignment.findMany({
-        where: {
-          userId: data.userId,
-          weekStart,
-        },
-      });
-
-      const totalAllocated = weekAssignments.reduce((sum, a) => sum + a.allocatedHours, 0);
-
-      if (totalAllocated + data.allocatedHours > user.capacity) {
+      if (totalAllocated + data.allocatedHours > dailyCapacity) {
         throw new AppError(
-          `Cannot allocate ${data.allocatedHours} hours. User has ${user.capacity - totalAllocated} hours available.`,
+          `Cannot allocate ${data.allocatedHours} hours. User has ${dailyCapacity - totalAllocated} hours available for ${assignedDate.toLocaleDateString('es')}.`,
           400
         );
       }
@@ -170,7 +159,7 @@ export class AssignmentsService {
         data: {
           userId: data.userId,
           requestId: data.requestId,
-          weekStart,
+          assignedDate,
           allocatedHours: data.allocatedHours,
           notes: data.notes,
           status: 'PLANNED',
@@ -206,6 +195,74 @@ export class AssignmentsService {
   }
 
   /**
+   * Create multiple assignments (bulk creation for multi-day distribution)
+   */
+  static async createBulk(assignments: CreateAssignmentDTO[]): Promise<AssignmentResponse[]> {
+    try {
+      // Validar capacidad diaria para cada asignación
+      const validationErrors: string[] = [];
+
+      for (const assignment of assignments) {
+        const date = new Date(assignment.assignedDate);
+        date.setHours(0, 0, 0, 0);
+
+        // Obtener usuario
+        const user = await prisma.user.findUnique({ where: { id: assignment.userId } });
+        if (!user) {
+          validationErrors.push(`User ${assignment.userId} not found`);
+          continue;
+        }
+
+        // Calcular capacidad diaria usada
+        const dayAssignments = await prisma.assignment.findMany({
+          where: { userId: assignment.userId, assignedDate: date },
+        });
+
+        const totalAllocated = dayAssignments.reduce((sum, a) => sum + a.allocatedHours, 0);
+        const dailyCapacity = user.capacity / 5; // capacity = 40h/semana → 8h/día
+
+        if (totalAllocated + assignment.allocatedHours > dailyCapacity) {
+          validationErrors.push(
+            `${user.name} - ${date.toLocaleDateString('es')}: Cannot allocate ${assignment.allocatedHours}h. ` +
+              `Has ${dailyCapacity - totalAllocated}h available (${dailyCapacity}h capacity).`
+          );
+        }
+      }
+
+      if (validationErrors.length > 0) {
+        throw new AppError(validationErrors.join('\n'), 400);
+      }
+
+      // Crear asignaciones en transacción
+      const created = await prisma.$transaction(
+        assignments.map((a) =>
+          prisma.assignment.create({
+            data: {
+              userId: a.userId,
+              requestId: a.requestId,
+              assignedDate: new Date(a.assignedDate),
+              allocatedHours: a.allocatedHours,
+              notes: a.notes,
+              status: 'PLANNED',
+            },
+            include: {
+              user: { select: { id: true, name: true, email: true, capacity: true } },
+              request: { select: { id: true, title: true, type: true, priority: true, status: true } },
+            },
+          })
+        )
+      );
+
+      logger.info(`${created.length} assignments created in bulk`);
+
+      return created as AssignmentResponse[];
+    } catch (error) {
+      logger.error('Error creating bulk assignments:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Update assignment
    */
   static async update(id: string, data: UpdateAssignmentDTO): Promise<AssignmentResponse> {
@@ -223,19 +280,20 @@ export class AssignmentsService {
 
       // Check capacity if allocatedHours is being updated
       if (data.allocatedHours && data.allocatedHours !== existingAssignment.allocatedHours) {
-        const weekAssignments = await prisma.assignment.findMany({
+        const dayAssignments = await prisma.assignment.findMany({
           where: {
             userId: existingAssignment.userId,
-            weekStart: existingAssignment.weekStart,
+            assignedDate: existingAssignment.assignedDate,
             id: { not: id }, // Exclude current assignment
           },
         });
 
-        const totalAllocated = weekAssignments.reduce((sum, a) => sum + a.allocatedHours, 0);
+        const totalAllocated = dayAssignments.reduce((sum, a) => sum + a.allocatedHours, 0);
+        const dailyCapacity = existingAssignment.user.capacity / 5; // Capacidad diaria
 
-        if (totalAllocated + data.allocatedHours > existingAssignment.user.capacity) {
+        if (totalAllocated + data.allocatedHours > dailyCapacity) {
           throw new AppError(
-            `Cannot allocate ${data.allocatedHours} hours. User has ${existingAssignment.user.capacity - totalAllocated} hours available.`,
+            `Cannot allocate ${data.allocatedHours} hours. User has ${dailyCapacity - totalAllocated} hours available.`,
             400
           );
         }
@@ -304,6 +362,51 @@ export class AssignmentsService {
   }
 
   /**
+   * Get assignments by date range
+   */
+  static async getByDateRange(startDate: string, endDate: string): Promise<AssignmentResponse[]> {
+    try {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+
+      const assignments = await prisma.assignment.findMany({
+        where: {
+          assignedDate: { gte: start, lte: end },
+        },
+        orderBy: { assignedDate: 'asc' },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              capacity: true,
+            },
+          },
+          request: {
+            select: {
+              id: true,
+              title: true,
+              type: true,
+              priority: true,
+              status: true,
+              estimatedHours: true,
+            },
+          },
+        },
+      });
+
+      return assignments as AssignmentResponse[];
+    } catch (error) {
+      logger.error('Error getting assignments by date range:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get assignments by week
    */
   static async getByWeek(weekStart: string): Promise<AssignmentResponse[]> {
@@ -350,7 +453,7 @@ export class AssignmentsService {
         where: {
           userId,
         },
-        orderBy: { weekStart: 'desc' },
+        orderBy: { assignedDate: 'desc' },
         include: {
           user: {
             select: {
@@ -380,12 +483,60 @@ export class AssignmentsService {
   }
 
   /**
+   * Get daily capacity summary for a specific date
+   */
+  static async getDailyCapacitySummary(date: string): Promise<any[]> {
+    try {
+      const targetDate = new Date(date);
+      targetDate.setHours(0, 0, 0, 0);
+
+      const users = await prisma.user.findMany({
+        where: { status: 'ACTIVE' },
+        select: { id: true, name: true, capacity: true },
+      });
+
+      const assignments = await prisma.assignment.findMany({
+        where: { assignedDate: targetDate },
+        include: {
+          request: { select: { id: true, title: true, type: true, priority: true } },
+        },
+      });
+
+      return users.map((user) => {
+        const userAssignments = assignments.filter((a) => a.userId === user.id);
+        const totalAllocated = userAssignments.reduce((sum, a) => sum + a.allocatedHours, 0);
+        const dailyCapacity = user.capacity / 5;
+        const utilization = dailyCapacity > 0 ? (totalAllocated / dailyCapacity) * 100 : 0;
+
+        return {
+          userId: user.id,
+          userName: user.name,
+          date: targetDate,
+          dailyCapacity,
+          totalAllocated,
+          available: dailyCapacity - totalAllocated,
+          utilization: Math.round(utilization * 100) / 100,
+          assignments: userAssignments,
+        };
+      });
+    } catch (error) {
+      logger.error('Error getting daily capacity summary:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get capacity summary
    */
   static async getCapacitySummary(weekStart?: string): Promise<CapacitySummary[]> {
     try {
       // Default to current week
       const targetWeekStart = weekStart ? new Date(weekStart) : this.getWeekStart(new Date());
+      targetWeekStart.setHours(0, 0, 0, 0);
+
+      const weekEnd = new Date(targetWeekStart);
+      weekEnd.setDate(weekEnd.getDate() + 4); // Lun-Vie (5 días)
+      weekEnd.setHours(23, 59, 59, 999);
 
       // Get all users
       const users = await prisma.user.findMany({
@@ -399,10 +550,10 @@ export class AssignmentsService {
         },
       });
 
-      // Get assignments for the week
+      // Get assignments for the week using date range
       const assignments = await prisma.assignment.findMany({
         where: {
-          weekStart: targetWeekStart,
+          assignedDate: { gte: targetWeekStart, lte: weekEnd },
         },
         include: {
           user: {
@@ -452,11 +603,13 @@ export class AssignmentsService {
   }
 
   /**
-   * Get week start date (Sunday)
+   * Get week start date (Monday)
    */
   private static getWeekStart(date: Date): Date {
     const weekStart = new Date(date);
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    const day = weekStart.getDay();
+    const diff = day === 0 ? -6 : 1 - day; // Si es domingo (-6), sino (1 - día actual)
+    weekStart.setDate(weekStart.getDate() + diff);
     weekStart.setHours(0, 0, 0, 0);
     return weekStart;
   }

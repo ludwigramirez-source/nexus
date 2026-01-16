@@ -30,7 +30,11 @@ const WeeklyCalendarGrid = ({
   };
 
   const getDayKey = (date) => {
-    return date?.toISOString()?.split('T')?.[0];
+    // Usar fecha local en vez de UTC para evitar desfase por timezone
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const getCapacityColor = (percentage) => {
@@ -51,8 +55,38 @@ const WeeklyCalendarGrid = ({
     const cellAssignments = getAssignmentsForCell(memberId, date);
     const totalHours = cellAssignments?.reduce((sum, a) => sum + a?.hours, 0);
     const member = teamMembers?.find(m => m?.id === memberId);
-    const dailyCapacity = member ? member?.weeklyCapacity / 5 : 8;
-    return Math.round((totalHours / dailyCapacity) * 100);
+    const dailyCapacity = member ? member?.capacity / 5 : 8;
+
+    return {
+      totalHours,
+      dailyCapacity,
+      percentage: Math.round((totalHours / dailyCapacity) * 100),
+      available: dailyCapacity - totalHours
+    };
+  };
+
+  const calculateWeeklyCapacity = (memberId) => {
+    const member = teamMembers?.find(m => m?.id === memberId);
+    if (!member) return { total: 0, used: 0, percentage: 0 };
+
+    const weeklyCapacity = member?.capacity;
+    const weekEnd = new Date(weekStart);
+    weekEnd?.setDate(weekStart?.getDate() + 4);
+
+    const weekAssignments = assignments?.filter(a => {
+      const assignDate = new Date(a?.date);
+      return a?.memberId === memberId && assignDate >= weekStart && assignDate <= weekEnd;
+    });
+
+    const totalUsed = weekAssignments?.reduce((sum, a) => sum + a?.hours, 0);
+    const percentage = Math.round((totalUsed / weeklyCapacity) * 100);
+
+    return {
+      total: weeklyCapacity,
+      used: totalUsed,
+      available: weeklyCapacity - totalUsed,
+      percentage
+    };
   };
 
   const handleDragOver = (e, memberId, date) => {
@@ -68,11 +102,13 @@ const WeeklyCalendarGrid = ({
   const handleDrop = (e, memberId, date) => {
     e?.preventDefault();
     setDragOverCell(null);
-    
+
     try {
       const requestData = JSON.parse(e?.dataTransfer?.getData('application/json'));
+      const dayKey = getDayKey(date);
+
       if (onDrop) {
-        onDrop(requestData, memberId, getDayKey(date));
+        onDrop(requestData, memberId, dayKey);
       }
     } catch (error) {
       console.error('Error processing drop:', error);
@@ -160,8 +196,12 @@ const WeeklyCalendarGrid = ({
             </tr>
           </thead>
           <tbody>
-            {teamMembers?.map((member) => (
-              <tr key={member?.id} className="border-b border-border hover:bg-muted/30 transition-smooth">
+            {teamMembers?.map((member) => {
+              const weeklyStats = calculateWeeklyCapacity(member?.id);
+
+              return (
+                <React.Fragment key={member?.id}>
+                  <tr className="border-b border-border hover:bg-muted/30 transition-smooth">
                 <td className="p-3 border-r border-border bg-muted/20">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -169,12 +209,12 @@ const WeeklyCalendarGrid = ({
                         {member?.name?.split(' ')?.map(n => n?.[0])?.join('')}
                       </span>
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-caption font-medium text-foreground truncate">
                         {member?.name}
                       </p>
                       <p className="text-xs font-caption text-muted-foreground">
-                        {member?.weeklyCapacity}h/semana
+                        {calculateWeeklyCapacity(member?.id).used}h / {member?.capacity}h
                       </p>
                     </div>
                   </div>
@@ -182,7 +222,7 @@ const WeeklyCalendarGrid = ({
                 {weekDays?.map((day, idx) => {
                   const cellKey = `${member?.id}-${getDayKey(day)}`;
                   const cellAssignments = getAssignmentsForCell(member?.id, day);
-                  const capacityPercentage = calculateDayCapacity(member?.id, day);
+                  const dayStats = calculateDayCapacity(member?.id, day);
                   const isDragOver = dragOverCell === cellKey;
 
                   return (
@@ -195,7 +235,7 @@ const WeeklyCalendarGrid = ({
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, member?.id, day)}
                     >
-                      <div className="space-y-1 min-h-[100px]">
+                      <div className="space-y-1 min-h-[120px]">
                         {cellAssignments?.map((assignment) => (
                           <div
                             key={assignment?.id}
@@ -213,18 +253,74 @@ const WeeklyCalendarGrid = ({
                             </div>
                           </div>
                         ))}
-                        
+
                         {cellAssignments?.length > 0 && (
-                          <div className={`mt-2 px-2 py-1 text-xs font-caption font-medium rounded text-center ${getCapacityColor(capacityPercentage)}`}>
-                            {capacityPercentage}%
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between text-xs mb-1">
+                              <span className="text-muted-foreground">
+                                {dayStats.totalHours}h / {dayStats.dailyCapacity}h
+                              </span>
+                              <span className={`font-medium ${
+                                dayStats.percentage >= 100 ? 'text-destructive' :
+                                dayStats.percentage >= 80 ? 'text-warning' :
+                                'text-success'
+                              }`}>
+                                {dayStats.percentage}%
+                              </span>
+                            </div>
+                            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={`h-full transition-all ${
+                                  dayStats.percentage >= 100 ? 'bg-destructive' :
+                                  dayStats.percentage >= 80 ? 'bg-warning' :
+                                  'bg-success'
+                                }`}
+                                style={{ width: `${Math.min(dayStats.percentage, 100)}%` }}
+                              />
+                            </div>
                           </div>
                         )}
                       </div>
                     </td>
                   );
                 })}
-              </tr>
-            ))}
+                  </tr>
+
+                  {/* Weekly Capacity Bar Row */}
+                  <tr className="border-b border-border bg-muted/10">
+                    <td colSpan={6} className="px-3 py-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-medium text-muted-foreground w-40">
+                          Capacidad Semanal:
+                        </span>
+                        <div className="flex-1">
+                          <div className="h-2 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className={`h-full transition-all ${
+                                weeklyStats.percentage >= 100 ? 'bg-destructive' :
+                                weeklyStats.percentage >= 80 ? 'bg-warning' :
+                                'bg-primary'
+                              }`}
+                              style={{ width: `${Math.min(weeklyStats.percentage, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                        <span className="text-xs font-medium text-foreground w-24 text-right">
+                          {weeklyStats.used}h / {weeklyStats.total}h
+                        </span>
+                        <span className={`text-xs font-semibold w-12 text-right ${
+                          weeklyStats.percentage >= 100 ? 'text-destructive' :
+                          weeklyStats.percentage >= 80 ? 'text-warning' :
+                          'text-primary'
+                        }`}>
+                          {weeklyStats.percentage}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                </React.Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>

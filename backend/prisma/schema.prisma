@@ -237,7 +237,7 @@ model Assignment {
   id             String           @id @default(cuid())
   userId         String           @map("user_id")
   requestId      String           @map("request_id")
-  weekStart      DateTime         @map("week_start")
+  assignedDate   DateTime         @map("assigned_date") // Día específico de trabajo
   allocatedHours Float            @map("allocated_hours")
   actualHours    Float            @default(0) @map("actual_hours")
   status         AssignmentStatus @default(PLANNED)
@@ -248,9 +248,8 @@ model Assignment {
   user    User    @relation(fields: [userId], references: [id])
   request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, requestId, weekStart])
-  @@index([userId])
-  @@index([weekStart])
+  @@index([userId, assignedDate]) // Para queries de capacidad diaria
+  @@index([requestId])             // Para agrupar por request
   @@map("assignments")
 }
 

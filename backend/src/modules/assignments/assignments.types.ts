@@ -6,24 +6,28 @@ import { AssignmentStatus } from '@prisma/client';
 // ============================================================================
 
 export const createAssignmentSchema = z.object({
-  userId: z.string().uuid('Invalid user ID'),
-  requestId: z.string().uuid('Invalid request ID'),
-  weekStart: z.string().datetime('Invalid date format'),
-  allocatedHours: z.number().positive('Hours must be positive').max(40, 'Cannot exceed 40 hours'),
+  userId: z.string().cuid('Invalid user ID'),
+  requestId: z.string().cuid('Invalid request ID'),
+  assignedDate: z.string().datetime('Invalid date format'), // Día específico
+  allocatedHours: z.number().positive('Hours must be positive').max(8, 'Cannot exceed 8 hours per day'), // Límite diario
   notes: z.string().optional(),
 });
 
+export const createBulkAssignmentsSchema = z.object({
+  assignments: z.array(createAssignmentSchema).min(1, 'At least one assignment required'),
+});
+
 export const updateAssignmentSchema = z.object({
-  allocatedHours: z.number().positive().max(40).optional(),
+  allocatedHours: z.number().positive().max(8).optional(), // Límite diario
   actualHours: z.number().nonnegative().optional(),
   status: z.nativeEnum(AssignmentStatus).optional(),
   notes: z.string().optional(),
 });
 
 export const assignmentFiltersSchema = z.object({
-  userId: z.string().uuid().optional(),
-  requestId: z.string().uuid().optional(),
-  weekStart: z.string().datetime().optional(),
+  userId: z.string().cuid().optional(),
+  requestId: z.string().cuid().optional(),
+  assignedDate: z.string().datetime().optional(), // Cambio de weekStart a assignedDate
   status: z.nativeEnum(AssignmentStatus).optional(),
   page: z.number().int().positive().default(1).optional(),
   limit: z.number().int().positive().max(100).default(20).optional(),
@@ -36,7 +40,7 @@ export const assignmentFiltersSchema = z.object({
 export interface CreateAssignmentDTO {
   userId: string;
   requestId: string;
-  weekStart: string;
+  assignedDate: string; // ISO date string
   allocatedHours: number;
   notes?: string;
 }
@@ -51,7 +55,7 @@ export interface UpdateAssignmentDTO {
 export interface AssignmentFilters {
   userId?: string;
   requestId?: string;
-  weekStart?: string;
+  assignedDate?: string; // Cambio de weekStart a assignedDate
   status?: AssignmentStatus;
   page?: number;
   limit?: number;
@@ -63,7 +67,7 @@ export interface AssignmentFilters {
 
 export interface AssignmentResponse {
   id: string;
-  weekStart: Date;
+  assignedDate: Date; // Cambio de weekStart a assignedDate
   allocatedHours: number;
   actualHours: number;
   status: AssignmentStatus;
@@ -92,6 +96,17 @@ export interface CapacitySummary {
   capacity: number;
   totalAllocated: number;
   totalCompleted: number;
+  utilization: number;
+  assignments: AssignmentResponse[];
+}
+
+export interface DailyCapacitySummary {
+  userId: string;
+  userName: string;
+  date: Date;
+  dailyCapacity: number;
+  totalAllocated: number;
+  available: number;
   utilization: number;
   assignments: AssignmentResponse[];
 }

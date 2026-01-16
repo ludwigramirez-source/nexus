@@ -13,15 +13,22 @@ import WeeklyCalendarGrid from './components/WeeklyCalendarGrid';
 import TeamMemberPanel from './components/TeamMemberPanel';
 import FilterToolbar from './components/FilterToolbar';
 import AssignmentDetailsModal from './components/AssignmentDetailsModal';
+import AssignmentDistributionModal from './components/AssignmentDistributionModal';
 
 const CapacityPlanningWorkspace = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [showDistributionModal, setShowDistributionModal] = useState(false);
+  const [pendingAssignment, setPendingAssignment] = useState(null);  // { request, member, date }
+
   const [weekStart, setWeekStart] = useState(() => {
-    const today = new Date('2026-01-07');
+    const today = new Date();
     const monday = new Date(today);
-    monday?.setDate(today?.getDate() - today?.getDay() + 1);
+    const day = monday.getDay();
+    const diff = day === 0 ? -6 : 1 - day;  // Si es domingo (-6), sino (1 - día actual)
+    monday.setDate(monday.getDate() + diff);
+    monday.setHours(0, 0, 0, 0);
     return monday;
   });
 
@@ -42,15 +49,67 @@ const CapacityPlanningWorkspace = () => {
       try {
         setLoading(true);
 
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 4);  // Viernes
+
         const [requestsData, usersData, assignmentsData] = await Promise.all([
-          requestService.getAll({ status: 'unassigned' }),
+          requestService.getAll(),
           userService.getAll(),
-          assignmentService.getAll()
+          assignmentService.getByDateRange(
+            weekStart.toISOString(),
+            weekEnd.toISOString()
+          )
         ]);
 
-        setUnassignedRequests(requestsData.data || []);
+        // Filtrar solo solicitudes planificables (excluir COMPLETED, CANCELLED)
+        const planifiableRequests = (requestsData.data || []).filter(request =>
+          ['INTAKE', 'BACKLOG', 'IN_PROGRESS', 'BLOCKED'].includes(request.status)
+        );
+
+        // Transformar assignments del backend al formato del frontend
+        const transformed = (assignmentsData.data || []).map(a => {
+          // Parsear fecha correctamente evitando problema de timezone
+          const assignedDate = new Date(a.assignedDate);
+          const year = assignedDate.getFullYear();
+          const month = String(assignedDate.getMonth() + 1).padStart(2, '0');
+          const day = String(assignedDate.getDate()).padStart(2, '0');
+          const dateStr = `${year}-${month}-${day}`;
+
+          return {
+            id: a.id,
+            requestId: a.request.id,
+            requestTitle: a.request.title,
+            requestType: a.request.type,
+            memberId: a.user.id,
+            memberName: a.user.name,
+            date: dateStr,
+            hours: a.allocatedHours,
+            priority: a.request.priority,
+            estimatedHours: a.request.estimatedHours || a.allocatedHours,
+            notes: a.notes || '',
+            status: a.status
+          };
+        });
+
+        setAssignments(transformed);
+
+        // Calcular horas asignadas por request
+        const assignedHoursByRequest = {};
+        transformed.forEach(assignment => {
+          if (!assignedHoursByRequest[assignment.requestId]) {
+            assignedHoursByRequest[assignment.requestId] = 0;
+          }
+          assignedHoursByRequest[assignment.requestId] += assignment.hours;
+        });
+
+        // Filtrar requests que NO están completamente asignadas
+        const unassigned = planifiableRequests.filter(request => {
+          const assignedHours = assignedHoursByRequest[request.id] || 0;
+          return assignedHours < request.estimatedHours;
+        });
+
+        setUnassignedRequests(unassigned);
         setTeamMembers(usersData.data || []);
-        setAssignments(assignmentsData.data || []);
       } catch (error) {
         console.error('Error loading data:', error);
         setUnassignedRequests([]);
@@ -96,7 +155,7 @@ const CapacityPlanningWorkspace = () => {
       socketService.off('assignment:created', handleAssignmentCreated);
       socketService.off('assignment:updated', handleAssignmentUpdated);
     };
-  }, []);
+  }, [weekStart]);
 
   useEffect(() => {
     if (teamMembers?.length > 0 && !selectedMember) {
@@ -108,48 +167,112 @@ const CapacityPlanningWorkspace = () => {
     const member = teamMembers?.find(m => m?.id === memberId);
     if (!member) return;
 
-    const newAssignment = {
-      id: `assign-${Date.now()}`,
-      requestId: request?.id,
-      requestTitle: request?.title,
-      requestType: request?.type,
-      memberId: memberId,
-      memberName: member?.name,
-      date: date,
-      hours: request?.estimatedHours,
-      priority: request?.priority,
-      estimatedHours: request?.estimatedHours,
-      notes: ''
-    };
+    setPendingAssignment({ request, member, date });
+    setShowDistributionModal(true);
+  };
 
-    setAssignments([...assignments, newAssignment]);
-    setUnassignedRequests(unassignedRequests?.filter(r => r?.id !== request?.id));
+  const handleConfirmAssignment = async (assignmentsToCreate) => {
+    try {
+      const result = await assignmentService.createBulk(assignmentsToCreate);
+
+      // Agregar al estado local
+      const newAssignments = result.data.map(a => {
+        // Parsear fecha correctamente evitando problema de timezone
+        const assignedDate = new Date(a.assignedDate);
+        const year = assignedDate.getFullYear();
+        const month = String(assignedDate.getMonth() + 1).padStart(2, '0');
+        const day = String(assignedDate.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+
+        return {
+          id: a.id,
+          requestId: a.request.id,
+          requestTitle: a.request.title,
+          requestType: a.request.type,
+          memberId: a.user.id,
+          memberName: a.user.name,
+          date: dateStr,
+          hours: a.allocatedHours,
+          priority: a.request.priority,
+          estimatedHours: a.request.estimatedHours || a.allocatedHours,
+          notes: a.notes || '',
+          status: a.status
+        };
+      });
+
+      const updatedAssignments = [...assignments, ...newAssignments];
+      setAssignments(updatedAssignments);
+
+      // Calcular total de horas asignadas para este request (incluyendo asignaciones previas)
+      const totalAssignedForRequest = updatedAssignments
+        .filter(a => a.requestId === pendingAssignment.request.id)
+        .reduce((sum, a) => sum + a.hours, 0);
+
+      // Remover de unassigned si se asignó completamente
+      if (totalAssignedForRequest >= pendingAssignment.request.estimatedHours) {
+        setUnassignedRequests(
+          unassignedRequests.filter(r => r.id !== pendingAssignment.request.id)
+        );
+      }
+
+      setShowDistributionModal(false);
+      setPendingAssignment(null);
+    } catch (error) {
+      console.error('Error creating assignments:', error);
+      alert(error.response?.data?.message || 'Error al crear asignaciones');
+    }
   };
 
   const handleAssignmentClick = (assignment) => {
     setSelectedAssignment(assignment);
   };
 
-  const handleUpdateAssignment = (updatedAssignment) => {
-    setAssignments(assignments?.map(a => 
-      a?.id === updatedAssignment?.id ? updatedAssignment : a
-    ));
+  const handleUpdateAssignment = async (updatedAssignment) => {
+    try {
+      await assignmentService.update(updatedAssignment.id, {
+        allocatedHours: updatedAssignment.hours,
+        notes: updatedAssignment.notes,
+        status: updatedAssignment.status
+      });
+
+      setAssignments(assignments.map(a =>
+        a.id === updatedAssignment.id ? updatedAssignment : a
+      ));
+    } catch (error) {
+      console.error('Error updating assignment:', error);
+      alert('Error al actualizar la asignación');
+    }
   };
 
-  const handleDeleteAssignment = (assignmentId) => {
-    const assignment = assignments?.find(a => a?.id === assignmentId);
-    if (assignment) {
-      const request = {
-        id: assignment?.requestId,
-        title: assignment?.requestTitle,
-        type: assignment?.requestType,
-        priority: assignment?.priority,
-        estimatedHours: assignment?.estimatedHours,
-        skills: []
-      };
-      setUnassignedRequests([...unassignedRequests, request]);
+  const handleDeleteAssignment = async (assignmentId) => {
+    try {
+      await assignmentService.delete(assignmentId);
+
+      const assignment = assignments.find(a => a.id === assignmentId);
+      if (assignment) {
+        // Re-agregar a unassigned si no hay más assignments de este request
+        const remainingAssignments = assignments.filter(
+          a => a.requestId === assignment.requestId && a.id !== assignmentId
+        );
+
+        if (remainingAssignments.length === 0) {
+          const request = {
+            id: assignment.requestId,
+            title: assignment.requestTitle,
+            type: assignment.requestType,
+            priority: assignment.priority,
+            estimatedHours: assignment.estimatedHours,
+            skills: []
+          };
+          setUnassignedRequests([...unassignedRequests, request]);
+        }
+      }
+
+      setAssignments(assignments.filter(a => a.id !== assignmentId));
+    } catch (error) {
+      console.error('Error deleting assignment:', error);
+      alert('Error al eliminar la asignación');
     }
-    setAssignments(assignments?.filter(a => a?.id !== assignmentId));
   };
 
   const handleSaveScenario = () => {
@@ -269,9 +392,22 @@ const CapacityPlanningWorkspace = () => {
       {selectedAssignment && (
         <AssignmentDetailsModal
           assignment={selectedAssignment}
+          allAssignments={assignments}
           onClose={() => setSelectedAssignment(null)}
           onUpdate={handleUpdateAssignment}
           onDelete={handleDeleteAssignment}
+        />
+      )}
+      {showDistributionModal && pendingAssignment && (
+        <AssignmentDistributionModal
+          request={pendingAssignment.request}
+          user={pendingAssignment.member}
+          initialDate={pendingAssignment.date}
+          onConfirm={handleConfirmAssignment}
+          onClose={() => {
+            setShowDistributionModal(false);
+            setPendingAssignment(null);
+          }}
         />
       )}
     </div>
