@@ -2,8 +2,8 @@
 
 **Repositorio GitHub:** https://github.com/ludwigramirez-source/nexus.git
 
-**Fecha de última actualización:** 14 de Enero 2026
-**Estado:** ✅ Sistema de Roles + Activity Logs + Tema Dark/Light + Dashboard + UI/UX Unificada implementados
+**Fecha de última actualización:** 16 de Enero 2026
+**Estado:** ✅ Sistema de Permisos Granular RBAC + Sistema de Roles + Activity Logs + Tema Dark/Light + Dashboard + UI/UX Unificada implementados
 
 ---
 
@@ -19,6 +19,173 @@
 - 💼 **Portafolio de Productos y Clientes**
 - 👥 **Administración de Equipos y Sistema**
 - 📈 **Dashboard de Analíticas e Insights**
+
+---
+
+## 🚀 CAMBIOS RECIENTES (16/01/2026)
+
+### ✅ Sistema de Permisos Granular (RBAC)
+
+Implementado sistema completo de control de acceso basado en roles con **40+ permisos granulares**.
+
+#### **Componentes Nuevos:**
+- `frontend/src/hooks/usePermissions.js` - Hook para verificar permisos en toda la aplicación
+- `frontend/src/components/ProtectedRoute.jsx` - Componente para proteger rutas por permisos
+- Actualización completa de `PermissionsManagement.jsx` con matriz de permisos
+
+#### **Permisos Implementados por Categoría:**
+
+**Dashboards (3):**
+- `view_executive_dashboard` - Ver Panel Ejecutivo
+- `view_analytics_dashboard` - Ver Analytics e Insights
+- `view_predictive_dashboard` - Ver Dashboard Predictivo
+
+**Gestión de Solicitudes (7):**
+- `view_all_requests` - Ver todas las solicitudes (sino, solo asignadas)
+- `create_request` - Crear solicitudes
+- `edit_own_request` - Editar solicitudes propias
+- `edit_any_request` - Editar cualquier solicitud
+- `delete_request` - Eliminar solicitudes
+- `assign_request` - Asignar solicitudes a usuarios
+- `change_request_status` - Cambiar estado de solicitudes
+
+**Planificación de Capacidad (4):**
+- `view_team_capacity` - Ver capacidad de todo el equipo
+- `assign_capacity` - Asignar tareas en capacidad
+- `edit_team_capacity` - Editar capacidad del equipo
+- `export_capacity_planning` - Exportar planning a Excel
+
+**OKRs y Roadmap (6):**
+- `view_okrs` - Ver OKRs del equipo
+- `create_okr` - Crear nuevos OKRs
+- `edit_own_okr` - Editar OKRs propios
+- `edit_any_okr` - Editar cualquier OKR
+- `delete_okr` - Eliminar OKRs
+- `manage_roadmap` - Gestionar roadmap
+
+**Productos y Clientes (4):**
+- `view_products_clients` - Ver productos y clientes
+- `manage_products` - Gestionar productos
+- `manage_clients` - Gestionar clientes
+- `view_client_health` - Ver salud de clientes
+
+**Administración (5):**
+- `manage_users` - Gestionar usuarios
+- `manage_roles` - Gestionar roles y permisos
+- `manage_skills` - Gestionar habilidades
+- `manage_system_config` - Configuración del sistema
+- `view_activity_logs` - Ver registro de actividades
+
+**Datos y Reportes (3):**
+- `export_data` - Exportar datos
+- `import_data` - Importar datos
+- `manage_backups` - Gestionar respaldos
+
+#### **Configuración de Permisos por Rol:**
+
+**CEO (Acceso Total):**
+- ✅ Todos los 40+ permisos habilitados
+
+**DEV_DIRECTOR (Director de Desarrollo):**
+- ✅ Todos los permisos excepto `manage_system_config`
+- ✅ Puede ver dashboards ejecutivos
+- ✅ Gestión completa de solicitudes, OKRs, productos
+- ✅ Administración de usuarios y roles
+
+**BACKEND/FRONTEND/FULLSTACK (Desarrolladores):**
+- ✅ `edit_own_request` - Solo editar sus requests asignados
+- ✅ `change_request_status` - Cambiar estado de requests
+- ✅ `export_capacity_planning` - Exportar su calendario
+- ✅ `view_okrs` - Ver OKRs del equipo (solo lectura)
+- ✅ `edit_own_okr` - Editar sus propios OKRs
+- ❌ NO pueden: crear requests, asignar, eliminar, ver dashboards
+
+**SOPORTE_VOIP (Soporte):**
+- ✅ `edit_own_request` - Solo requests de soporte asignados
+- ✅ `change_request_status` - Cambiar estado
+- ✅ `export_capacity_planning` - Exportar su calendario
+- ❌ NO pueden: ver OKRs, crear requests, asignar
+
+#### **Protecciones Implementadas:**
+
+**1. Sidebar Filtrado (frontend/src/components/ui/Sidebar.jsx)**
+- Los menús se ocultan automáticamente si el usuario no tiene permiso
+- Ejemplo: Desarrolladores no ven "Panel Ejecutivo" ni "Dashboard Predictivo"
+
+**2. Rutas Protegidas (frontend/src/Routes.jsx)**
+- Todas las rutas verifican permisos antes de renderizar
+- Redireccionan automáticamente si no hay acceso
+- Verificación de autenticación (token JWT)
+
+**3. Botones y Acciones Protegidas:**
+- **Botón "Crear Solicitud"** (index.jsx:506): Solo CEO y DEV_DIRECTOR
+- **Botón "Editar"** (RequestTable.jsx:290): Solo si puede editar el recurso
+- **Botón "Eliminar"** (RequestTable.jsx:305): Solo si tiene `delete_request`
+- **Acciones Masivas** (BulkActionsToolbar.jsx:13): Filtradas por permiso
+
+**4. Inicialización Automática (LoginForm.jsx:32)**
+- Al hacer login, se cargan permisos por defecto según rol
+- No requiere llamadas al backend (evita errores 403)
+- Roles hardcodeados en cliente para disponibilidad inmediata
+
+#### **Archivos Modificados:**
+
+```
+frontend/src/
+├── hooks/
+│   └── usePermissions.js ✨ NUEVO
+├── components/
+│   ├── ProtectedRoute.jsx ✨ NUEVO
+│   ├── iconMap.js (agregados: Square, Upload, HardDrive)
+│   └── ui/
+│       └── Sidebar.jsx (filtrado por permisos)
+├── pages/
+│   ├── authentication-and-access-control/
+│   │   └── LoginForm.jsx (inicialización de permisos)
+│   ├── team-and-system-administration/
+│   │   └── PermissionsManagement.jsx (40+ permisos)
+│   └── request-management-center/
+│       ├── index.jsx (protección botón crear)
+│       ├── BulkActionsToolbar.jsx (filtrado acciones)
+│       └── RequestTable.jsx (protección editar/eliminar)
+└── Routes.jsx (rutas protegidas)
+```
+
+#### **Uso del Hook usePermissions:**
+
+```javascript
+import usePermissions from '../hooks/usePermissions';
+
+const MiComponente = () => {
+  const permissions = usePermissions();
+
+  // Verificar un permiso específico
+  if (permissions.can('create_request')) {
+    // Mostrar botón crear
+  }
+
+  // Verificar si puede editar recurso
+  if (permissions.canEdit('request', resourceOwnerId)) {
+    // Mostrar botón editar
+  }
+
+  // Verificar al menos uno de varios permisos
+  if (permissions.canAny(['manage_users', 'manage_roles'])) {
+    // Mostrar sección admin
+  }
+
+  // Verificar si debe filtrar por usuario
+  if (permissions.shouldFilterByUser('request')) {
+    // Filtrar solo requests asignados
+  }
+};
+```
+
+#### **Pendientes para Completar:**
+- ⏳ Filtrado de datos en backend según rol del usuario
+- ⏳ Middleware de autorización en endpoints del backend
+- ⏳ Sincronización de permisos con base de datos (actualmente hardcoded)
+- ⏳ Protección de endpoints `/api/system-config/roles` para usuarios no admin
 
 ---
 
