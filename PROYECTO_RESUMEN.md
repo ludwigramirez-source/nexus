@@ -2192,3 +2192,524 @@ const handleExport = () => {
 
 **Última actualización:** 16 de Enero 2026 - 17:00
 **Desarrollado por:** Claude Code + Usuario
+
+
+## 📅 16 de Enero 2026 - Mejoras Sistema OKRs y Key Results
+
+### 🎯 Objetivo
+Implementar un sistema completo de gestión de OKRs con modales de creación, edición de confianza, selección de trimestres, y actualización en tiempo real de Key Results.
+
+### ✨ Funcionalidades Implementadas
+
+#### 1. Modal Completo de Creación de OKRs
+
+**Componente nuevo: AddOKRModal.jsx**
+- **Campos del formulario:**
+  - Título del objetivo (mínimo 5 caracteres)
+  - Descripción detallada (mínimo 10 caracteres)
+  - Selector de trimestre (Q1, Q2, Q3, Q4)
+  - Selector de año (2020-2030)
+  - Departamento opcional (9 opciones predefinidas)
+  - Nivel de confianza inicial con slider (0-100%, default 70%)
+
+**Características:**
+- Validación completa de formulario
+- Slider interactivo para confianza con input numérico sincronizado
+- UI profesional con backdrop blur
+- Información contextual sobre qué es un OKR
+- Integración con estado de autenticación (currentUserId)
+
+**Departamentos disponibles:**
+- Ingeniería
+- Producto
+- Ventas
+- Marketing
+- Customer Success
+- Operaciones
+- Finanzas
+- Recursos Humanos
+
+#### 2. Modal de Creación de Key Results
+
+**Componente nuevo: AddKeyResultModal.jsx**
+- **Campos del formulario:**
+  - Nombre del resultado clave
+  - Valor objetivo (número)
+  - Unidad de medida (usuarios, %, horas, etc.)
+  - Valor actual (default 0)
+  - Peso/importancia (0-100%)
+
+**Características:**
+- Validación completa con mensajes de error específicos
+- Diseño responsive y profesional
+- Información contextual sobre el peso de KRs
+- Integración automática con el OKR padre
+
+#### 3. Edición de Confianza en Tiempo Real
+
+**Modificaciones en OKRCard.jsx:**
+- **Click en badge de confianza:** Activa modo edición
+- **Input numérico:** 0-100% con botones Guardar/Cancelar
+- **Colores dinámicos:**
+  - Verde (≥80%): Alta confianza
+  - Amarillo (50-79%): Confianza media
+  - Rojo (<50%): Baja confianza
+- **Hover effect:** Indicador visual de que es editable
+- **Tooltip:** "Click para editar confianza"
+
+#### 4. Actualización de Progreso de Key Results
+
+**Mejoras en OKRCard.jsx:**
+- **Debounce de 800ms:** Evita múltiples llamadas al backend
+- **Estado local inmediato:** UI responsive mientras se espera el debounce
+- **Input numérico editable:** Con validación min/max
+- **Actualización automática:** Del progreso del OKR completo
+- **Barra de progreso visual:** Se actualiza en tiempo real
+
+**Flujo de actualización:**
+1. Usuario escribe nuevo valor en input
+2. UI se actualiza instantáneamente (estado local)
+3. Después de 800ms sin más cambios, se envía al backend
+4. Backend recalcula el progreso del OKR
+5. Frontend recarga el OKR actualizado
+
+#### 5. Corrección de Métricas del Dashboard
+
+**Problemas corregidos:**
+- **NaN% en confianza:** Agregado campo `confidence` a la base de datos
+- **0 OKRs activos:** Corregido filtro para comparar quarter + year
+- **División por cero:** Manejo de casos sin datos (devuelve 0)
+
+**Cálculo correcto de métricas:**
+```javascript
+const calculateMetrics = () => {
+  // Filtrar por quarter Y year
+  const [quarter, year] = currentQuarter.split(' ');
+  const activeOKRs = okrs?.filter(okr =>
+    okr?.quarter === quarter && okr?.year === parseInt(year)
+  )?.length || 0;
+
+  // Promedio con manejo de división por cero
+  const averageProgress = okrs?.length > 0
+    ? Math.round(okrs.reduce((sum, okr) => sum + (okr?.progress || 0), 0) / okrs.length)
+    : 0;
+
+  const averageConfidence = okrs?.length > 0
+    ? Math.round(okrs.reduce((sum, okr) => sum + (okr?.confidence || 0), 0) / okrs.length)
+    : 0;
+
+  const plannedFeatures = roadmapFeatures?.filter(
+    f => f?.quarter === currentQuarter
+  )?.length || 0;
+
+  return { activeOKRs, averageProgress, averageConfidence, plannedFeatures };
+};
+```
+
+#### 6. Servicio de Roadmap
+
+**Nuevo archivo: roadmapService.js**
+- Integración con API de roadmap
+- CRUD completo para features del roadmap
+- Sincronización con OKRs por trimestre
+
+### 🗄️ Cambios en Base de Datos
+
+#### Modelo OKR Actualizado (schema.prisma)
+
+```prisma
+model OKR {
+  id          String    @id @default(cuid())
+  title       String
+  description String?   @db.Text
+  quarter     Quarter
+  year        Int
+  ownerId     String    @map("owner_id")
+  department  String?   // NUEVO
+  status      OKRStatus @default(NOT_STARTED)
+  progress    Float     @default(0)
+  confidence  Float     @default(70) // NUEVO - Nivel de confianza 0-100
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  owner      User        @relation(fields: [ownerId], references: [id])
+  keyResults KeyResult[]
+
+  @@index([quarter])
+  @@index([year])
+  @@map("okrs")
+}
+```
+
+**Migración aplicada:**
+- Campo `confidence`: Float, default 70
+- Campo `department`: String, opcional
+- Comando usado: `npx prisma db push`
+
+### 🔧 Cambios Backend
+
+#### OKR Types (okrs.types.ts)
+
+**Schemas de validación actualizados:**
+```typescript
+export const createOKRSchema = z.object({
+  title: z.string().min(3, 'Title must be at least 3 characters').max(200),
+  description: z.string().min(10),
+  quarter: z.nativeEnum(Quarter),
+  year: z.number().int().min(2020).max(2100),
+  ownerId: z.string().cuid(),
+  department: z.string().optional(),      // NUEVO
+  confidence: z.number().min(0).max(100).optional(), // NUEVO
+});
+
+export const updateOKRSchema = z.object({
+  title: z.string().min(3).max(200).optional(),
+  description: z.string().min(10).optional(),
+  quarter: z.nativeEnum(Quarter).optional(),
+  year: z.number().int().min(2020).max(2100).optional(),
+  ownerId: z.string().cuid().optional(),
+  department: z.string().optional(),      // NUEVO
+  confidence: z.number().min(0).max(100).optional(), // NUEVO
+});
+```
+
+**DTOs actualizados:**
+```typescript
+export interface CreateOKRDTO {
+  title: string;
+  description: string;
+  quarter: Quarter;
+  year: number;
+  ownerId: string;
+  department?: string;    // NUEVO
+  confidence?: number;    // NUEVO
+}
+
+export interface UpdateOKRDTO {
+  title?: string;
+  description?: string;
+  quarter?: Quarter;
+  year?: number;
+  ownerId?: string;
+  department?: string;    // NUEVO
+  confidence?: number;    // NUEVO
+}
+
+export interface OKRResponse {
+  id: string;
+  title: string;
+  description: string;
+  quarter: Quarter;
+  year: number;
+  department?: string;    // NUEVO
+  status: OKRStatus;
+  progress: number;
+  confidence: number;     // NUEVO
+  createdAt: Date;
+  updatedAt: Date;
+  owner: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  keyResults?: KeyResultResponse[];
+}
+```
+
+#### OKR Service (okrs.service.ts)
+
+**Método create actualizado:**
+```typescript
+const okr = await prisma.oKR.create({
+  data: {
+    title: data.title,
+    description: data.description,
+    quarter: data.quarter,
+    year: data.year,
+    ownerId: data.ownerId,
+    department: data.department,           // NUEVO
+    confidence: data.confidence ?? 70,     // NUEVO
+    status: 'NOT_STARTED',
+    progress: 0,
+  },
+  // ...
+});
+```
+
+**Método update actualizado:**
+```typescript
+const okr = await prisma.oKR.update({
+  where: { id },
+  data: {
+    title: data.title,
+    description: data.description,
+    quarter: data.quarter,
+    year: data.year,
+    ownerId: data.ownerId,
+    department: data.department,     // NUEVO
+    confidence: data.confidence,     // NUEVO
+  },
+  // ...
+});
+```
+
+**Método formatOKRResponse actualizado:**
+```typescript
+return {
+  id: okr.id,
+  title: okr.title,
+  description: okr.description,
+  quarter: okr.quarter,
+  year: okr.year,
+  department: okr.department,        // NUEVO
+  status: okr.status,
+  progress: okr.progress,
+  confidence: okr.confidence || 70,  // NUEVO
+  createdAt: okr.createdAt,
+  updatedAt: okr.updatedAt,
+  owner: okr.owner,
+  keyResults: formattedKeyResults,
+};
+```
+
+### 🎨 Cambios Frontend
+
+#### OKRs Index (index.jsx)
+
+**Nuevos estados:**
+```javascript
+const [isAddKRModalOpen, setIsAddKRModalOpen] = useState(false);
+const [selectedOKR, setSelectedOKR] = useState(null);
+const [isAddOKRModalOpen, setIsAddOKRModalOpen] = useState(false);
+```
+
+**Nuevas funciones:**
+```javascript
+// Crear OKR
+const handleAddOKR = () => {
+  setIsAddOKRModalOpen(true);
+};
+
+const handleSubmitOKR = async (okrData) => {
+  const response = await okrService.create(okrData);
+  setOkrs([response.data, ...okrs]);
+};
+
+// Actualizar progreso de KR
+const handleKeyResultProgressUpdate = async (okrId, krId, currentValue) => {
+  await okrService.updateKeyResultProgress(okrId, krId, currentValue);
+  const updatedOKR = await okrService.getById(okrId);
+  setOkrs(okrs?.map(okr => okr?.id === okrId ? updatedOKR.data : okr));
+};
+```
+
+**Modales renderizados:**
+```jsx
+{/* Add OKR Modal */}
+<AddOKRModal
+  isOpen={isAddOKRModalOpen}
+  onClose={() => setIsAddOKRModalOpen(false)}
+  onSubmit={handleSubmitOKR}
+  currentUserId={JSON.parse(localStorage.getItem('user') || '{}').id}
+/>
+
+{/* Add Key Result Modal */}
+<AddKeyResultModal
+  isOpen={isAddKRModalOpen}
+  onClose={() => {
+    setIsAddKRModalOpen(false);
+    setSelectedOKR(null);
+  }}
+  onSubmit={handleSubmitKeyResult}
+  okrTitle={selectedOKR?.title || ''}
+/>
+```
+
+#### OKR Card (OKRCard.jsx)
+
+**Nuevos estados para edición de confianza:**
+```javascript
+const [isEditingConfidence, setIsEditingConfidence] = useState(false);
+const [editedConfidence, setEditedConfidence] = useState(okr?.confidence || 70);
+```
+
+**Handler para guardar confianza:**
+```javascript
+const handleSaveConfidence = () => {
+  const confidence = Math.max(0, Math.min(100, editedConfidence));
+  onUpdate(okr?.id, { confidence });
+  setIsEditingConfidence(false);
+};
+```
+
+**Actualización de progreso con debounce:**
+```javascript
+const handleKeyResultProgressChange = useCallback((krId, newValue) => {
+  // Actualizar estado local inmediatamente
+  setLocalKRValues(prev => ({
+    ...prev,
+    [krId]: newValue
+  }));
+
+  // Limpiar timer existente
+  if (debounceTimers[krId]) {
+    clearTimeout(debounceTimers[krId]);
+  }
+
+  // Crear nuevo timer para actualizar backend
+  const timer = setTimeout(() => {
+    if (onKeyResultProgressUpdate) {
+      onKeyResultProgressUpdate(okr?.id, krId, newValue);
+    }
+  }, 800);
+
+  setDebounceTimers(prev => ({
+    ...prev,
+    [krId]: timer
+  }));
+}, [okr?.id, onKeyResultProgressUpdate, debounceTimers]);
+```
+
+**UI de edición de confianza:**
+```jsx
+{isEditingConfidence ? (
+  <div className="flex items-center gap-1">
+    <input
+      type="number"
+      min="0"
+      max="100"
+      value={editedConfidence}
+      onChange={(e) => setEditedConfidence(parseInt(e?.target?.value) || 0)}
+      className="w-16 px-2 py-1 text-xs bg-background border border-input rounded focus:outline-none focus:ring-2 focus:ring-ring"
+      autoFocus
+    />
+    <span className="text-xs font-caption text-muted-foreground">%</span>
+    <Button variant="ghost" size="icon" onClick={handleSaveConfidence} iconName="Check" />
+    <Button variant="ghost" size="icon" onClick={() => { /* cancelar */ }} iconName="X" />
+  </div>
+) : (
+  <div
+    className={`cursor-pointer hover:ring-2 ${getConfidenceColor(okr?.confidence)}`}
+    onClick={() => setIsEditingConfidence(true)}
+    title="Click para editar confianza"
+  >
+    <span>{okr?.confidence || 70}% confianza</span>
+  </div>
+)}
+```
+
+#### OKR Service (okrService.js)
+
+**Nuevos métodos:**
+```javascript
+async updateKeyResultProgress(okrId, krId, currentValue) {
+  const { data } = await api.patch(
+    `/okrs/${okrId}/key-results/${krId}/progress`,
+    { currentValue }
+  );
+  return data;
+}
+```
+
+### 📊 Impacto
+
+**Experiencia de Usuario:**
+- ✅ Creación de OKRs con todos los detalles necesarios
+- ✅ Selección flexible de trimestres (Q1-Q4) y años
+- ✅ Edición visual e intuitiva de confianza
+- ✅ Actualización de progreso sin lag visual
+- ✅ Métricas correctas y sin NaN
+
+**Calidad de Datos:**
+- ✅ Validación completa en formularios
+- ✅ Campo de confianza con default sensato (70%)
+- ✅ Departamentos estandarizados
+- ✅ Progreso calculado automáticamente
+
+**Escalabilidad:**
+- ✅ Filtros dinámicos que se actualizan con datos reales
+- ✅ Modales reutilizables para crear OKRs y KRs
+- ✅ Sistema de debounce evita sobrecarga del backend
+
+### 📝 Archivos Modificados y Nuevos
+
+**Backend:**
+- `prisma/schema.prisma` - Campos confidence y department
+- `src/modules/okrs/okrs.types.ts` - Schemas y DTOs actualizados
+- `src/modules/okrs/okrs.service.ts` - Métodos create/update con nuevos campos
+
+**Frontend - Componentes nuevos:**
+- `pages/ok-rs-and-roadmap-management/components/AddOKRModal.jsx` - Modal de creación de OKRs
+- `pages/ok-rs-and-roadmap-management/components/AddKeyResultModal.jsx` - Modal de creación de KRs
+- `services/roadmapService.js` - Servicio de roadmap
+
+**Frontend - Componentes modificados:**
+- `pages/ok-rs-and-roadmap-management/index.jsx` - Integración de modales y handlers
+- `pages/ok-rs-and-roadmap-management/components/OKRCard.jsx` - Edición de confianza y actualización de progreso
+- `pages/ok-rs-and-roadmap-management/components/FilterBar.jsx` - Filtros dinámicos por trimestre
+- `services/okrService.js` - Método updateKeyResultProgress
+
+### 🎓 Lecciones Aprendidas
+
+1. **Debounce en Inputs:** Esencial para evitar múltiples llamadas al backend cuando el usuario escribe
+2. **Estado Local + Backend:** Mantener estado local para UI responsive mientras se espera la respuesta del backend
+3. **Validación de Formularios:** Importante mostrar errores específicos por campo para mejor UX
+4. **Modales Profesionales:** Backdrop blur y animaciones mejoran significativamente la percepción de calidad
+5. **Valores por Defecto:** 70% de confianza inicial es un buen balance (ni muy optimista ni muy pesimista)
+6. **Filtros Dinámicos:** Generar opciones de filtros desde datos reales evita opciones vacías
+7. **Divisiones por Cero:** Siempre manejar casos edge en cálculos matemáticos
+
+### 🔄 Flujo Completo de Usuario
+
+**Crear un nuevo OKR:**
+1. Usuario hace clic en "Nuevo OKR"
+2. Se abre modal con formulario completo
+3. Usuario llena título, descripción, selecciona Q3 2026, departamento "Ingeniería", confianza 85%
+4. Click en "Crear OKR"
+5. OKR aparece en la lista con badge verde "85% confianza"
+
+**Agregar Key Result:**
+1. Usuario expande el OKR
+2. Click en "Agregar KR"
+3. Llena "Aumentar usuarios activos" con objetivo 100 usuarios
+4. Click en "Crear Resultado Clave"
+5. KR aparece con input editable mostrando 0/100 usuarios
+
+**Actualizar progreso:**
+1. Usuario escribe "25" en el input del KR
+2. UI se actualiza instantáneamente a 25/100 (25%)
+3. Después de 800ms, se guarda en backend
+4. Backend recalcula progreso del OKR completo
+5. Frontend recarga y muestra nuevo progreso general
+
+**Ajustar confianza:**
+1. Usuario hace click en badge "85% confianza"
+2. Aparece input con botones Guardar/Cancelar
+3. Usuario cambia a 75% y guarda
+4. Badge se actualiza con nuevo color (amarillo) y texto "75% confianza"
+
+### ⏱️ Resumen de Tareas
+
+- Diseño e implementación de AddOKRModal: ~1.5 horas
+- Diseño e implementación de AddKeyResultModal: ~1 hora
+- Edición de confianza en OKRCard: ~45 minutos
+- Sistema de actualización de progreso con debounce: ~1 hora
+- Actualización de backend (schemas, DTOs, servicios): ~1 hora
+- Migración de base de datos: ~30 minutos
+- Corrección de métricas y filtros: ~45 minutos
+- Testing y ajustes finales: ~30 minutos
+
+**Total:** ~7 horas
+
+### 🚀 Próximos Pasos Sugeridos
+
+1. **Validación de rango de fechas:** Validar que el año del OKR sea coherente con el quarter actual
+2. **Historial de confianza:** Guardar cambios de confianza en una tabla de auditoría
+3. **Notificaciones:** Alertar cuando la confianza baja de 50%
+4. **Templates de OKRs:** Crear plantillas predefinidas por departamento
+5. **Gráficos de progreso:** Visualizar evolución de KRs a lo largo del tiempo
+
+---
+
+**Última actualización:** 17 de Enero 2026 - 00:30
+**Desarrollado por:** Claude Code + Usuario
