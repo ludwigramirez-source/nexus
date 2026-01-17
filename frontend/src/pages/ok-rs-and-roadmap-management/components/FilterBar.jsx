@@ -3,26 +3,38 @@ import React from 'react';
 import Button from '../../../components/ui/Button';
 import Select from '../../../components/ui/Select';
 
-const FilterBar = ({ filters, onFilterChange, onClearFilters, onExport }) => {
+const FilterBar = ({
+  filters,
+  onFilterChange,
+  onClearFilters,
+  onExport,
+  activeTab,
+  okrs = [],
+  roadmapFeatures = []
+}) => {
+  // Generate dynamic owner options from actual OKRs data
   const ownerOptions = [
     { value: 'all', label: 'Todos los propietarios' },
-    { value: 'Ludwig Schmidt', label: 'Ludwig Schmidt' },
-    { value: 'Carlos Mendoza', label: 'Carlos Mendoza' },
-    { value: 'Ana Torres', label: 'Ana Torres' }
+    ...Array.from(new Set(okrs.map(okr => okr.owner?.name).filter(Boolean)))
+      .map(name => ({ value: name, label: name }))
   ];
 
-  const departmentOptions = [
-    { value: 'all', label: 'Todos los departamentos' },
-    { value: 'Desarrollo', label: 'Desarrollo' },
-    { value: 'Producto', label: 'Producto' },
-    { value: 'Ventas', label: 'Ventas' }
-  ];
-
-  const statusOptions = [
+  // OKR Status options (backend: NOT_STARTED, ON_TRACK, AT_RISK, BEHIND, COMPLETED)
+  const okrStatusOptions = [
     { value: 'all', label: 'Todos los estados' },
-    { value: 'on-track', label: 'En camino' },
-    { value: 'at-risk', label: 'En riesgo' },
-    { value: 'off-track', label: 'Fuera de camino' }
+    { value: 'NOT_STARTED', label: 'No iniciado' },
+    { value: 'ON_TRACK', label: 'En camino' },
+    { value: 'AT_RISK', label: 'En riesgo' },
+    { value: 'BEHIND', label: 'Atrasado' },
+    { value: 'COMPLETED', label: 'Completado' }
+  ];
+
+  // Roadmap Status options (backend: PLANNED, IN_PROGRESS, DONE)
+  const roadmapStatusOptions = [
+    { value: 'all', label: 'Todos los estados' },
+    { value: 'planned', label: 'Planeado' },
+    { value: 'in-progress', label: 'En progreso' },
+    { value: 'done', label: 'Completado' }
   ];
 
   const priorityOptions = [
@@ -32,34 +44,64 @@ const FilterBar = ({ filters, onFilterChange, onClearFilters, onExport }) => {
     { value: 'low', label: 'Baja' }
   ];
 
+  // Generate dynamic quarter options
+  const quarterOptions = [
+    { value: 'all', label: 'Todos los trimestres' },
+    ...Array.from(new Set([
+      ...okrs.map(okr => `${okr.quarter} ${okr.year}`).filter(Boolean),
+      ...roadmapFeatures.map(f => f.quarter).filter(Boolean)
+    ])).sort().map(q => ({ value: q, label: q }))
+  ];
+
   return (
     <div className="bg-card border border-border rounded-lg p-4 mb-6">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 flex-1">
-          <Select
-            options={ownerOptions}
-            value={filters?.owner}
-            onChange={(value) => onFilterChange('owner', value)}
-            placeholder="Propietario"
-          />
-          <Select
-            options={departmentOptions}
-            value={filters?.department}
-            onChange={(value) => onFilterChange('department', value)}
-            placeholder="Departamento"
-          />
-          <Select
-            options={statusOptions}
-            value={filters?.status}
-            onChange={(value) => onFilterChange('status', value)}
-            placeholder="Estado"
-          />
-          <Select
-            options={priorityOptions}
-            value={filters?.priority}
-            onChange={(value) => onFilterChange('priority', value)}
-            placeholder="Prioridad"
-          />
+          {activeTab === 'okrs' ? (
+            <>
+              {/* OKR Filters */}
+              <Select
+                options={ownerOptions}
+                value={filters?.owner}
+                onChange={(value) => onFilterChange('owner', value)}
+                placeholder="Propietario"
+              />
+              <Select
+                options={quarterOptions}
+                value={filters?.quarter}
+                onChange={(value) => onFilterChange('quarter', value)}
+                placeholder="Trimestre"
+              />
+              <Select
+                options={okrStatusOptions}
+                value={filters?.status}
+                onChange={(value) => onFilterChange('status', value)}
+                placeholder="Estado"
+              />
+            </>
+          ) : (
+            <>
+              {/* Roadmap Filters */}
+              <Select
+                options={quarterOptions}
+                value={filters?.quarter}
+                onChange={(value) => onFilterChange('quarter', value)}
+                placeholder="Trimestre"
+              />
+              <Select
+                options={roadmapStatusOptions}
+                value={filters?.status}
+                onChange={(value) => onFilterChange('status', value)}
+                placeholder="Estado"
+              />
+              <Select
+                options={priorityOptions}
+                value={filters?.priority}
+                onChange={(value) => onFilterChange('priority', value)}
+                placeholder="Prioridad"
+              />
+            </>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Button

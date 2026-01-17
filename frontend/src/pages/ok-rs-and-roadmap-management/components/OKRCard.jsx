@@ -1,11 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 
 import Button from '../../../components/ui/Button';
 
-const OKRCard = ({ okr, onUpdate, onDelete, onAddKeyResult }) => {
+const OKRCard = ({ okr, onUpdate, onDelete, onAddKeyResult, onKeyResultProgressUpdate }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState(okr?.title);
+  const [debounceTimers, setDebounceTimers] = useState({});
+  const [localKRValues, setLocalKRValues] = useState({});
+  const [isEditingConfidence, setIsEditingConfidence] = useState(false);
+  const [editedConfidence, setEditedConfidence] = useState(okr?.confidence || 70);
+
+  // Initialize local values when okr changes
+  useEffect(() => {
+    const initialValues = {};
+    okr?.keyResults?.forEach(kr => {
+      initialValues[kr.id] = kr.currentValue;
+    });
+    setLocalKRValues(initialValues);
+  }, [okr]);
 
   const getConfidenceColor = (confidence) => {
     if (confidence >= 80) return 'text-success bg-success/10';
@@ -24,12 +37,36 @@ const OKRCard = ({ okr, onUpdate, onDelete, onAddKeyResult }) => {
     setIsEditing(false);
   };
 
-  const handleKeyResultUpdate = (krId, updates) => {
-    const updatedKeyResults = okr?.keyResults?.map(kr =>
-      kr?.id === krId ? { ...kr, ...updates } : kr
-    );
-    onUpdate(okr?.id, { keyResults: updatedKeyResults });
+  const handleSaveConfidence = () => {
+    const confidence = Math.max(0, Math.min(100, editedConfidence));
+    onUpdate(okr?.id, { confidence });
+    setIsEditingConfidence(false);
   };
+
+  const handleKeyResultProgressChange = useCallback((krId, newValue) => {
+    // Update local state immediately for responsive UI
+    setLocalKRValues(prev => ({
+      ...prev,
+      [krId]: newValue
+    }));
+
+    // Clear existing timer for this KR
+    if (debounceTimers[krId]) {
+      clearTimeout(debounceTimers[krId]);
+    }
+
+    // Set new timer to update backend after user stops typing
+    const timer = setTimeout(() => {
+      if (onKeyResultProgressUpdate) {
+        onKeyResultProgressUpdate(okr?.id, krId, newValue);
+      }
+    }, 800); // Wait 800ms after user stops typing
+
+    setDebounceTimers(prev => ({
+      ...prev,
+      [krId]: timer
+    }));
+  }, [okr?.id, onKeyResultProgressUpdate, debounceTimers]);
 
   return (
     <div className="bg-card border border-border rounded-lg shadow-elevation-1 overflow-hidden">
@@ -79,17 +116,57 @@ const OKRCard = ({ okr, onUpdate, onDelete, onAddKeyResult }) => {
             )}
             <div className="flex flex-wrap items-center gap-2 md:gap-3 mt-2">
               <span className="text-xs md:text-sm font-caption text-muted-foreground">
-                {okr?.owner}
+                {okr?.owner?.name || okr?.owner}
               </span>
-              <span className="text-xs md:text-sm font-caption text-muted-foreground">
-                •
-              </span>
-              <span className="text-xs md:text-sm font-caption text-muted-foreground">
-                {okr?.department}
-              </span>
-              <span className={`px-2 py-1 text-xs font-caption font-medium rounded ${getConfidenceColor(okr?.confidence)}`}>
-                {okr?.confidence}% confianza
-              </span>
+              {okr?.department && (
+                <>
+                  <span className="text-xs md:text-sm font-caption text-muted-foreground">
+                    •
+                  </span>
+                  <span className="text-xs md:text-sm font-caption text-muted-foreground">
+                    {okr?.department}
+                  </span>
+                </>
+              )}
+              {isEditingConfidence ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={editedConfidence}
+                    onChange={(e) => setEditedConfidence(parseInt(e?.target?.value) || 0)}
+                    className="w-16 px-2 py-1 text-xs bg-background border border-input rounded focus:outline-none focus:ring-2 focus:ring-ring"
+                    autoFocus
+                  />
+                  <span className="text-xs font-caption text-muted-foreground">%</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleSaveConfidence}
+                    iconName="Check"
+                    iconSize={14}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setEditedConfidence(okr?.confidence || 70);
+                      setIsEditingConfidence(false);
+                    }}
+                    iconName="X"
+                    iconSize={14}
+                  />
+                </div>
+              ) : (
+                <div
+                  className={`flex items-center gap-1 px-2 py-1 text-xs font-caption font-medium rounded cursor-pointer hover:ring-2 hover:ring-ring/50 transition-all ${getConfidenceColor(okr?.confidence || 70)}`}
+                  onClick={() => setIsEditingConfidence(true)}
+                  title="Click para editar confianza"
+                >
+                  <span>{okr?.confidence || 70}% confianza</span>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 ml-4">
@@ -150,9 +227,18 @@ const OKRCard = ({ okr, onUpdate, onDelete, onAddKeyResult }) => {
                 className="p-3 md:p-4 bg-muted/50 rounded-lg space-y-2"
               >
                 <div className="flex items-start justify-between">
-                  <p className="text-sm font-caption text-foreground flex-1">
-                    {kr?.description}
-                  </p>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-caption font-medium text-foreground">
+                        {kr?.title}
+                      </p>
+                      {kr?.weight && (
+                        <span className="text-xs font-caption text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                          Peso: {kr?.weight}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -169,28 +255,30 @@ const OKRCard = ({ okr, onUpdate, onDelete, onAddKeyResult }) => {
                 <div className="flex items-center gap-3">
                   <input
                     type="number"
-                    value={kr?.current}
-                    onChange={(e) =>
-                      handleKeyResultUpdate(kr?.id, {
-                        current: parseFloat(e?.target?.value)
-                      })
-                    }
+                    value={localKRValues[kr?.id] ?? kr?.currentValue}
+                    onChange={(e) => {
+                      const value = parseFloat(e?.target?.value) || 0;
+                      handleKeyResultProgressChange(kr?.id, value);
+                    }}
+                    min="0"
+                    max={kr?.targetValue}
+                    step="1"
                     className="w-20 px-2 py-1 text-sm bg-background border border-input rounded focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <span className="text-sm font-caption text-muted-foreground">
-                    / {kr?.target} {kr?.unit}
+                    / {kr?.targetValue} {kr?.unit}
                   </span>
                   <span className="text-sm font-caption font-medium text-foreground ml-auto">
-                    {Math.round((kr?.current / kr?.target) * 100)}%
+                    {Math.round(((localKRValues[kr?.id] ?? kr?.currentValue) / kr?.targetValue) * 100)}%
                   </span>
                 </div>
                 <div className="w-full h-1.5 bg-background rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all duration-300 ${getProgressColor(
-                      (kr?.current / kr?.target) * 100
+                      ((localKRValues[kr?.id] ?? kr?.currentValue) / kr?.targetValue) * 100
                     )}`}
                     style={{
-                      width: `${Math.min((kr?.current / kr?.target) * 100, 100)}%`
+                      width: `${Math.min(((localKRValues[kr?.id] ?? kr?.currentValue) / kr?.targetValue) * 100, 100)}%`
                     }}
                   />
                 </div>

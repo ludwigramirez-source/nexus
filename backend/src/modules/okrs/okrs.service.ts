@@ -53,7 +53,7 @@ export class OKRsService {
       });
 
       // Format response with calculated progress
-      const formattedOKRs = okrs.map(this.formatOKRResponse);
+      const formattedOKRs = okrs.map((okr) => OKRsService.formatOKRResponse(okr));
 
       return {
         okrs: formattedOKRs,
@@ -93,7 +93,7 @@ export class OKRsService {
         throw new AppError('OKR not found', 404);
       }
 
-      return this.formatOKRResponse(okr);
+      return OKRsService.formatOKRResponse(okr);
     } catch (error) {
       logger.error('Error getting OKR by ID:', error);
       throw error;
@@ -105,14 +105,19 @@ export class OKRsService {
    */
   static async create(data: CreateOKRDTO): Promise<OKRResponse> {
     try {
+      logger.info(`Creating OKR with data: ${JSON.stringify(data)}`);
+
       // Verify owner exists
       const owner = await prisma.user.findUnique({
         where: { id: data.ownerId },
       });
 
       if (!owner) {
+        logger.error(`Owner not found: ${data.ownerId}`);
         throw new AppError('Owner not found', 404);
       }
+
+      logger.info(`Owner found: ${owner.name}`);
 
       const okr = await prisma.oKR.create({
         data: {
@@ -121,6 +126,8 @@ export class OKRsService {
           quarter: data.quarter,
           year: data.year,
           ownerId: data.ownerId,
+          department: data.department,
+          confidence: data.confidence ?? 70,
           status: 'NOT_STARTED',
           progress: 0,
         },
@@ -136,9 +143,9 @@ export class OKRsService {
         },
       });
 
-      logger.info(`OKR created: ${okr.id}`);
+      logger.info(`OKR created in DB: ${okr.id}`);
 
-      return this.formatOKRResponse(okr);
+      return OKRsService.formatOKRResponse(okr);
     } catch (error) {
       logger.error('Error creating OKR:', error);
       throw error;
@@ -177,6 +184,8 @@ export class OKRsService {
           quarter: data.quarter,
           year: data.year,
           ownerId: data.ownerId,
+          department: data.department,
+          confidence: data.confidence,
         },
         include: {
           owner: {
@@ -192,7 +201,7 @@ export class OKRsService {
 
       logger.info(`OKR updated: ${id}`);
 
-      return this.formatOKRResponse(okr);
+      return OKRsService.formatOKRResponse(okr);
     } catch (error) {
       logger.error('Error updating OKR:', error);
       throw error;
@@ -255,7 +264,7 @@ export class OKRsService {
 
       logger.info(`OKR status updated: ${id} to ${data.status}`);
 
-      return this.formatOKRResponse(updatedOKR);
+      return OKRsService.formatOKRResponse(updatedOKR);
     } catch (error) {
       logger.error('Error updating OKR status:', error);
       throw error;
@@ -282,15 +291,16 @@ export class OKRsService {
           targetValue: data.targetValue,
           currentValue: data.currentValue || 0,
           unit: data.unit,
+          weight: data.weight || 1,
         },
       });
 
       // Update OKR progress
-      await this.updateOKRProgress(okrId);
+      await OKRsService.updateOKRProgress(okrId);
 
       logger.info(`Key result created for OKR: ${okrId}`);
 
-      return this.formatKeyResultResponse(keyResult);
+      return OKRsService.formatKeyResultResponse(keyResult);
     } catch (error) {
       logger.error('Error creating key result:', error);
       throw error;
@@ -317,15 +327,16 @@ export class OKRsService {
           targetValue: data.targetValue,
           currentValue: data.currentValue,
           unit: data.unit,
+          weight: data.weight,
         },
       });
 
       // Update OKR progress
-      await this.updateOKRProgress(okrId);
+      await OKRsService.updateOKRProgress(okrId);
 
       logger.info(`Key result updated: ${krId}`);
 
-      return this.formatKeyResultResponse(updatedKR);
+      return OKRsService.formatKeyResultResponse(updatedKR);
     } catch (error) {
       logger.error('Error updating key result:', error);
       throw error;
@@ -350,7 +361,7 @@ export class OKRsService {
       });
 
       // Update OKR progress
-      await this.updateOKRProgress(okrId);
+      await OKRsService.updateOKRProgress(okrId);
 
       logger.info(`Key result deleted: ${krId}`);
     } catch (error) {
@@ -384,11 +395,11 @@ export class OKRsService {
       });
 
       // Update OKR progress
-      await this.updateOKRProgress(okrId);
+      await OKRsService.updateOKRProgress(okrId);
 
       logger.info(`Key result progress updated: ${krId}`);
 
-      return this.formatKeyResultResponse(updatedKR);
+      return OKRsService.formatKeyResultResponse(updatedKR);
     } catch (error) {
       logger.error('Error updating key result progress:', error);
       throw error;
@@ -428,19 +439,41 @@ export class OKRsService {
    * Format OKR response
    */
   private static formatOKRResponse(okr: any): OKRResponse {
-    return {
-      id: okr.id,
-      title: okr.title,
-      description: okr.description,
-      quarter: okr.quarter,
-      year: okr.year,
-      status: okr.status,
-      progress: okr.progress,
-      createdAt: okr.createdAt,
-      updatedAt: okr.updatedAt,
-      owner: okr.owner,
-      keyResults: okr.keyResults?.map(this.formatKeyResultResponse),
-    };
+    try {
+      logger.info(`Formatting OKR: ${okr.id}, hasKeyResults: ${!!okr.keyResults}`);
+
+      let formattedKeyResults = [];
+      if (okr.keyResults && Array.isArray(okr.keyResults)) {
+        logger.info(`Formatting key results, count: ${okr.keyResults.length}`);
+        formattedKeyResults = okr.keyResults.map((kr: any) => {
+          try {
+            return OKRsService.formatKeyResultResponse(kr);
+          } catch (err) {
+            logger.error('Error formatting key result:', err);
+            throw err;
+          }
+        });
+      }
+
+      return {
+        id: okr.id,
+        title: okr.title,
+        description: okr.description,
+        quarter: okr.quarter,
+        year: okr.year,
+        department: okr.department,
+        status: okr.status,
+        progress: okr.progress,
+        confidence: okr.confidence || 70,
+        createdAt: okr.createdAt,
+        updatedAt: okr.updatedAt,
+        owner: okr.owner,
+        keyResults: formattedKeyResults,
+      };
+    } catch (error) {
+      logger.error('Error in formatOKRResponse:', error);
+      throw error;
+    }
   }
 
   /**
@@ -455,9 +488,13 @@ export class OKRsService {
       targetValue: kr.targetValue,
       currentValue: kr.currentValue,
       unit: kr.unit,
+      weight: kr.weight || 1,
       progress: Math.round(progress * 100) / 100,
       createdAt: kr.createdAt,
       updatedAt: kr.updatedAt,
     };
   }
 }
+
+ 
+// Force reload

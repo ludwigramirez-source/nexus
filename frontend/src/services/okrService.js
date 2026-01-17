@@ -54,5 +54,57 @@ export const okrService = {
       console.error('Error deleting OKR:', error);
       throw error;
     }
+  },
+
+  async updateStatus(id, status) {
+    try {
+      const { data } = await api.patch(`/okrs/${id}/status`, { status });
+      return data;
+    } catch (error) {
+      console.error('Error updating OKR status:', error);
+      throw error;
+    }
+  },
+
+  // ========== KEY RESULTS ==========
+
+  async createKeyResult(okrId, keyResultData) {
+    try {
+      const { data } = await api.post(`/okrs/${okrId}/key-results`, keyResultData);
+      return data;
+    } catch (error) {
+      console.error('Error creating key result:', error);
+      throw error;
+    }
+  },
+
+  async updateKeyResult(okrId, krId, keyResultData) {
+    try {
+      const { data } = await api.put(`/okrs/${okrId}/key-results/${krId}`, keyResultData);
+      return data;
+    } catch (error) {
+      console.error('Error updating key result:', error);
+      throw error;
+    }
+  },
+
+  async deleteKeyResult(okrId, krId) {
+    try {
+      const { data } = await api.delete(`/okrs/${okrId}/key-results/${krId}`);
+      return data;
+    } catch (error) {
+      console.error('Error deleting key result:', error);
+      throw error;
+    }
+  },
+
+  async updateKeyResultProgress(okrId, krId, currentValue) {
+    try {
+      const { data } = await api.patch(`/okrs/${okrId}/key-results/${krId}/progress`, { currentValue });
+      return data;
+    } catch (error) {
+      console.error('Error updating key result progress:', error);
+      throw error;
+    }
   }
 };

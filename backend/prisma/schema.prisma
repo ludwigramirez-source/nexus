@@ -267,11 +267,13 @@ model OKR {
   id          String    @id @default(cuid())
   title       String
   description String?   @db.Text
-  quarter     String
+  quarter     Quarter
   year        Int
   ownerId     String    @map("owner_id")
+  department  String?
   status      OKRStatus @default(NOT_STARTED)
   progress    Float     @default(0)
+  confidence  Float     @default(70) // Confidence level 0-100
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
@@ -290,6 +292,7 @@ model KeyResult {
   targetValue  Float    @map("target_value")
   currentValue Float    @default(0) @map("current_value")
   unit         String
+  weight       Float    @default(1.0) // Weight/importance of this KR (0-1 or percentage)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

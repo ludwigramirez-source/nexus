@@ -10,7 +10,9 @@ export const createOKRSchema = z.object({
   description: z.string().min(10),
   quarter: z.nativeEnum(Quarter),
   year: z.number().int().min(2020).max(2100),
-  ownerId: z.string().uuid(),
+  ownerId: z.string().cuid(),
+  department: z.string().optional(),
+  confidence: z.number().min(0).max(100).optional(),
 });
 
 export const updateOKRSchema = z.object({
@@ -18,7 +20,9 @@ export const updateOKRSchema = z.object({
   description: z.string().min(10).optional(),
   quarter: z.nativeEnum(Quarter).optional(),
   year: z.number().int().min(2020).max(2100).optional(),
-  ownerId: z.string().uuid().optional(),
+  ownerId: z.string().cuid().optional(),
+  department: z.string().optional(),
+  confidence: z.number().min(0).max(100).optional(),
 });
 
 export const updateOKRStatusSchema = z.object({
@@ -30,6 +34,7 @@ export const createKeyResultSchema = z.object({
   targetValue: z.number(),
   currentValue: z.number().default(0),
   unit: z.string().min(1),
+  weight: z.number().min(0).max(100).default(1),
 });
 
 export const updateKeyResultSchema = z.object({
@@ -37,6 +42,7 @@ export const updateKeyResultSchema = z.object({
   targetValue: z.number().optional(),
   currentValue: z.number().optional(),
   unit: z.string().min(1).optional(),
+  weight: z.number().min(0).max(100).optional(),
 });
 
 export const updateKeyResultProgressSchema = z.object({
@@ -47,7 +53,7 @@ export const okrFiltersSchema = z.object({
   quarter: z.nativeEnum(Quarter).optional(),
   year: z.number().int().optional(),
   status: z.nativeEnum(OKRStatus).optional(),
-  ownerId: z.string().uuid().optional(),
+  ownerId: z.string().cuid().optional(),
   page: z.number().int().positive().default(1).optional(),
   limit: z.number().int().positive().max(100).default(20).optional(),
 });
@@ -62,6 +68,8 @@ export interface CreateOKRDTO {
   quarter: Quarter;
   year: number;
   ownerId: string;
+  department?: string;
+  confidence?: number;
 }
 
 export interface UpdateOKRDTO {
@@ -70,6 +78,8 @@ export interface UpdateOKRDTO {
   quarter?: Quarter;
   year?: number;
   ownerId?: string;
+  department?: string;
+  confidence?: number;
 }
 
 export interface UpdateOKRStatusDTO {
@@ -81,6 +91,7 @@ export interface CreateKeyResultDTO {
   targetValue: number;
   currentValue?: number;
   unit: string;
+  weight?: number;
 }
 
 export interface UpdateKeyResultDTO {
@@ -88,6 +99,7 @@ export interface UpdateKeyResultDTO {
   targetValue?: number;
   currentValue?: number;
   unit?: string;
+  weight?: number;
 }
 
 export interface UpdateKeyResultProgressDTO {
@@ -113,6 +125,7 @@ export interface KeyResultResponse {
   targetValue: number;
   currentValue: number;
   unit: string;
+  weight: number;
   progress: number;
   createdAt: Date;
   updatedAt: Date;
@@ -124,8 +137,10 @@ export interface OKRResponse {
   description: string;
   quarter: Quarter;
   year: number;
+  department?: string;
   status: OKRStatus;
   progress: number;
+  confidence: number;
   createdAt: Date;
   updatedAt: Date;
   owner: {
