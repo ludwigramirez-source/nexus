@@ -91,6 +91,9 @@ const ProductsAndClientPortfolio = () => {
   const [funnelFilters, setFunnelFilters] = useState({});
   const [funnelLoading, setFunnelLoading] = useState(false);
 
+  // Activity Log visibility
+  const [isActivityLogVisible, setIsActivityLogVisible] = useState(true);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -881,6 +884,23 @@ const ProductsAndClientPortfolio = () => {
               </h1>
             </div>
             <div className="flex items-center space-x-3">
+              {/* Toggle Activity Log Button - Only show on products/clients tabs */}
+              {activeTab !== 'dashboard' && activeTab !== 'quotations' && activeTab !== 'funnel' && (
+                <button
+                  onClick={() => setIsActivityLogVisible(!isActivityLogVisible)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted transition-smooth text-sm"
+                  title={isActivityLogVisible ? 'Ocultar registro de actividades' : 'Mostrar registro de actividades'}
+                >
+                  <Icon
+                    name={isActivityLogVisible ? 'EyeOff' : 'Eye'}
+                    size={18}
+                    className="text-muted-foreground"
+                  />
+                  <span className="hidden md:inline text-muted-foreground">
+                    {isActivityLogVisible ? 'Ocultar' : 'Mostrar'} Actividades
+                  </span>
+                </button>
+              )}
               <NotificationCenter />
               <UserProfileHeader />
             </div>
@@ -889,7 +909,11 @@ const ProductsAndClientPortfolio = () => {
 
         <main className="px-4 md:px-6 lg:px-8 py-6 md:py-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className={activeTab !== 'dashboard' && activeTab !== 'quotations' && activeTab !== 'funnel' ? 'lg:col-span-9' : 'lg:col-span-12'}>
+            <div className={
+              activeTab !== 'dashboard' && activeTab !== 'quotations' && activeTab !== 'funnel' && isActivityLogVisible
+                ? 'lg:col-span-9'
+                : 'lg:col-span-12'
+            }>
           <Breadcrumb />
 
           {/* Tabs Navigation */}
@@ -1311,8 +1335,8 @@ const ProductsAndClientPortfolio = () => {
           )}
             </div>
 
-            {/* Activity Log Sidebar - Hidden on Dashboard, Quotations, and Funnel tabs */}
-            {activeTab !== 'dashboard' && activeTab !== 'quotations' && activeTab !== 'funnel' && (
+            {/* Activity Log Sidebar - Hidden on Dashboard, Quotations, and Funnel tabs, or when toggled off */}
+            {activeTab !== 'dashboard' && activeTab !== 'quotations' && activeTab !== 'funnel' && isActivityLogVisible && (
               <div className="lg:col-span-3">
                 <ActivityLogSidebar />
               </div>
