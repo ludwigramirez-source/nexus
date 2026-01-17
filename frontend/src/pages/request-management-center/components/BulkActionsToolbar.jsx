@@ -1,19 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 import Select from '../../../components/ui/Select';
+import usePermissions from '../../../hooks/usePermissions';
 
 const BulkActionsToolbar = ({ selectedCount, onBulkAction, onClearSelection, teamMembers = [] }) => {
+  const permissions = usePermissions();
   const [selectedAction, setSelectedAction] = useState('');
   const [selectedValue, setSelectedValue] = useState('');
 
-  const actionOptions = [
-    { value: 'assign', label: 'Asignar a miembro' },
-    { value: 'status', label: 'Cambiar estado' },
-    { value: 'priority', label: 'Cambiar prioridad' },
-    { value: 'export', label: 'Exportar selección' },
-    { value: 'delete', label: 'Eliminar' }
-  ];
+  // Filtrar acciones disponibles según permisos
+  const actionOptions = useMemo(() => {
+    const allActions = [
+      { value: 'assign', label: 'Asignar a miembro', permission: 'assign_request' },
+      { value: 'status', label: 'Cambiar estado', permission: 'change_request_status' },
+      { value: 'priority', label: 'Cambiar prioridad', permission: 'change_request_status' },
+      { value: 'export', label: 'Exportar selección' }, // No requiere permiso especial
+      { value: 'delete', label: 'Eliminar', permission: 'delete_request' }
+    ];
+
+    return allActions.filter(action => {
+      // Si no tiene permiso requerido, no mostrar la acción
+      if (action.permission && !permissions.can(action.permission)) {
+        return false;
+      }
+      return true;
+    });
+  }, [permissions]);
 
   const teamMemberOptions = teamMembers?.map(member => ({
     value: member?.id,

@@ -4,6 +4,7 @@ import { assignmentService } from '../../services/assignmentService';
 import socketService from '../../services/socketService';
 import api from '../../services/api';
 import * as XLSX from 'xlsx';
+import usePermissions from '../../hooks/usePermissions';
 import Sidebar from '../../components/ui/Sidebar';
 import UserProfileHeader from '../../components/ui/UserProfileHeader';
 import NotificationCenter from '../../components/ui/NotificationCenter';
@@ -20,6 +21,7 @@ import RequestDetailModal from './components/RequestDetailModal';
 import Pagination from './components/Pagination';
 
 const RequestManagementCenter = () => {
+  const permissions = usePermissions();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState('table');
@@ -119,7 +121,15 @@ const RequestManagementCenter = () => {
     socketService.connect();
 
     const handleRequestCreated = (newRequest) => {
-      setRequests((prev) => [newRequest, ...prev]);
+      setRequests((prev) => {
+        // Evitar duplicados - verificar si el request ya existe
+        const exists = prev.some(r => r.id === newRequest.id);
+        if (exists) {
+          console.log('Request already exists, skipping duplicate:', newRequest.id);
+          return prev;
+        }
+        return [newRequest, ...prev];
+      });
     };
 
     const handleRequestUpdated = (updatedRequest) => {
@@ -501,18 +511,20 @@ const RequestManagementCenter = () => {
               >
                 Exportar
               </Button>
-              <Button
-                variant="default"
-                iconName="Plus"
-                iconPosition="left"
-                onClick={() => {
-                  setIsEditMode(false);
-                  setRequestToEdit(null);
-                  setIsRequestModalOpen(true);
-                }}
-              >
-                Nueva Solicitud
-              </Button>
+              {permissions.can('create_request') && (
+                <Button
+                  variant="default"
+                  iconName="Plus"
+                  iconPosition="left"
+                  onClick={() => {
+                    setIsEditMode(false);
+                    setRequestToEdit(null);
+                    setIsRequestModalOpen(true);
+                  }}
+                >
+                  Nueva Solicitud
+                </Button>
+              )}
             </div>
 
             <div className="flex items-center space-x-2 bg-muted rounded-lg p-1">

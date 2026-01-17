@@ -23,6 +23,91 @@ const LoginForm = ({ onLogin, onForgotPassword }) => {
     setFormData(prev => ({ ...prev, rememberDevice: e.target.checked }));
   };
 
+  /**
+   * 🔑 Inicializa permisos por defecto según el rol del usuario
+   * NOTA: No llama al backend para evitar problemas de permisos (403)
+   * Los roles están hardcodeados para que funcionen sin backend
+   */
+  const initializePermissions = (userRole) => {
+    try {
+      console.log('🔑 Initializing permissions for role:', userRole);
+
+      // Roles del sistema (hardcoded para evitar 403 en el login)
+      const systemRoles = [
+        { id: 'role_ceo', name: 'CEO', label: 'CEO' },
+        { id: 'role_dev_director', name: 'DEV_DIRECTOR', label: 'Director de Desarrollo' },
+        { id: 'role_backend', name: 'BACKEND', label: 'Desarrollador Backend' },
+        { id: 'role_frontend', name: 'FRONTEND', label: 'Desarrollador Frontend' },
+        { id: 'role_fullstack', name: 'FULLSTACK', label: 'Desarrollador Full Stack' },
+        { id: 'role_soporte', name: 'SOPORTE_VOIP', label: 'Soporte VoIP' }
+      ];
+
+      // Guardar roles en localStorage para usePermissions hook
+      localStorage.setItem('systemRoles', JSON.stringify(systemRoles));
+
+      // Permisos predefinidos por rol
+      const defaultRolePermissions = {
+        'CEO': [
+          'view_executive_dashboard', 'view_analytics_dashboard', 'view_predictive_dashboard',
+          'view_all_requests', 'create_request', 'edit_own_request', 'edit_any_request',
+          'delete_request', 'assign_request', 'change_request_status',
+          'view_team_capacity', 'assign_capacity', 'edit_team_capacity', 'export_capacity_planning',
+          'view_okrs', 'create_okr', 'edit_own_okr', 'edit_any_okr', 'delete_okr', 'manage_roadmap',
+          'view_products_clients', 'manage_products', 'manage_clients', 'view_client_health',
+          'manage_users', 'manage_roles', 'manage_skills', 'manage_system_config', 'view_activity_logs',
+          'export_data', 'import_data', 'manage_backups'
+        ],
+        'DEV_DIRECTOR': [
+          'view_executive_dashboard', 'view_analytics_dashboard', 'view_predictive_dashboard',
+          'view_all_requests', 'create_request', 'edit_own_request', 'edit_any_request',
+          'delete_request', 'assign_request', 'change_request_status',
+          'view_team_capacity', 'assign_capacity', 'edit_team_capacity', 'export_capacity_planning',
+          'view_okrs', 'create_okr', 'edit_own_okr', 'edit_any_okr', 'delete_okr', 'manage_roadmap',
+          'view_products_clients', 'manage_products', 'manage_clients', 'view_client_health',
+          'manage_users', 'manage_roles', 'manage_skills', 'view_activity_logs',
+          'export_data', 'import_data', 'manage_backups'
+        ],
+        'BACKEND': [
+          'edit_own_request', 'change_request_status', 'export_capacity_planning', 'view_okrs', 'edit_own_okr'
+        ],
+        'FRONTEND': [
+          'edit_own_request', 'change_request_status', 'export_capacity_planning', 'view_okrs', 'edit_own_okr'
+        ],
+        'FULLSTACK': [
+          'edit_own_request', 'change_request_status', 'export_capacity_planning', 'view_okrs', 'edit_own_okr'
+        ],
+        'SOPORTE_VOIP': [
+          'edit_own_request', 'change_request_status', 'export_capacity_planning'
+        ]
+      };
+
+      // Buscar el role ID correspondiente
+      const roleData = systemRoles.find(r => r.name === userRole);
+      if (!roleData) {
+        console.warn('⚠️ Role not found:', userRole);
+        return;
+      }
+
+      // Verificar si ya existen permisos guardados
+      const savedPermissions = JSON.parse(localStorage.getItem('rolePermissions') || '{}');
+
+      // Inicializar permisos con defaults (siempre sobrescribir para asegurar consistencia)
+      if (defaultRolePermissions[userRole]) {
+        const defaults = defaultRolePermissions[userRole];
+        savedPermissions[roleData.id] = defaults.reduce((acc, permId) => {
+          acc[permId] = true;
+          return acc;
+        }, {});
+
+        localStorage.setItem('rolePermissions', JSON.stringify(savedPermissions));
+        console.log('✅ Default permissions initialized for role:', userRole, savedPermissions[roleData.id]);
+      }
+    } catch (error) {
+      console.error('❌ Error initializing permissions:', error);
+      // No bloqueamos el login si hay error en permisos
+    }
+  };
+
   const validateForm = () => {
     const newErrors = {};
 
@@ -64,6 +149,9 @@ const LoginForm = ({ onLogin, onForgotPassword }) => {
         console.log('✅ Login successful, saving additional tokens...');
         localStorage.setItem('refresh_token', response.tokens.refreshToken);
         localStorage.setItem('user', JSON.stringify(response.user));
+
+        // 🔑 Inicializar permisos según el rol del usuario
+        initializePermissions(response.user.role);
 
         console.log('✅ Tokens saved, calling onLogin...');
         onLogin({

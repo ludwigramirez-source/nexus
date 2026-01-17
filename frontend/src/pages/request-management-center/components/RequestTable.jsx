@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import Icon from '../../../components/AppIcon';
 import Image from '../../../components/AppImage';
 import { formatHoursCompact } from '../../../utils/timeFormat';
+import usePermissions from '../../../hooks/usePermissions';
 
 const RequestTable = ({ requests, onRequestSelect, selectedRequests, onBulkAction, onInlineEdit, onRequestClick, onEditRequest, onDeleteRequest }) => {
+  const permissions = usePermissions();
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'asc' });
   const [editingCell, setEditingCell] = useState(null);
 
@@ -284,30 +286,36 @@ const RequestTable = ({ requests, onRequestSelect, selectedRequests, onBulkActio
                   >
                     <Icon name="Eye" size={16} className="text-muted-foreground" />
                   </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (onEditRequest) {
-                        onEditRequest(request?.id);
-                      }
-                    }}
-                    className="p-2 rounded hover:bg-muted transition-smooth"
-                    title="Editar"
-                  >
-                    <Icon name="Edit" size={16} className="text-muted-foreground" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (onDeleteRequest) {
-                        onDeleteRequest(request?.id);
-                      }
-                    }}
-                    className="p-2 rounded hover:bg-error/10 transition-smooth"
-                    title="Eliminar"
-                  >
-                    <Icon name="Trash2" size={16} className="text-error" />
-                  </button>
+
+                  {permissions.canEdit('request', request?.createdBy) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onEditRequest) {
+                          onEditRequest(request?.id);
+                        }
+                      }}
+                      className="p-2 rounded hover:bg-muted transition-smooth"
+                      title="Editar"
+                    >
+                      <Icon name="Edit" size={16} className="text-muted-foreground" />
+                    </button>
+                  )}
+
+                  {permissions.can('delete_request') && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onDeleteRequest) {
+                          onDeleteRequest(request?.id);
+                        }
+                      }}
+                      className="p-2 rounded hover:bg-error/10 transition-smooth"
+                      title="Eliminar"
+                    >
+                      <Icon name="Trash2" size={16} className="text-error" />
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>
